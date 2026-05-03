@@ -1,3 +1,5 @@
 history_command.txt
 Makefile
-/configs/local.yaml
+.gitignore
+docs/
+pkg/

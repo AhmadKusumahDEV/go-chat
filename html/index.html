@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .panel { padding: 15px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 20px; }
+        #log { height: 300px; overflow-y: scroll; background: #f4f4f4; padding: 10px; border: 1px solid #ccc; font-family: monospace; }
+        input[type="text"] { padding: 5px; width: 60%; }
+        button { padding: 5px 15px; cursor: pointer; }
+        .system { color: #888; }
+        .received { color: blue; }
+        .sent { color: green; }
+    </style>
+</head>
+<body>
+
+    <h2>Go-Chat WebSocket Test</h2>
+
+    <div class="panel">
+        <label for="userId">User ID:</label>
+        <input type="text" id="userId" placeholder="Masukkan User ID (contoh: 123)" value="user123">
+        <button id="connectBtn" onclick="connect()">Connect</button>
+        <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+    </div>
+
+    <div class="panel">
+        <label for="messageInput">Message:</label>
+        <input type="text" id="messageInput" placeholder="Ketik pesan JSON disini..." disabled>
+        <button id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+    </div>
+
+    <h3>Logs:</h3>
+    <div id="log"></div>
+
+    <script>
+        let ws;
+        const logDiv = document.getElementById('log');
+
+        function appendLog(message, type = 'system') {
+            const time = new Date().toLocaleTimeString();
+            const p = document.createElement('p');
+            p.className = type;
+            p.textContent = `[${time}] ${message}`;
+            logDiv.appendChild(p);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function connect() {
+            const userId = document.getElementById('userId').value;
+            if (!userId) {
+                alert("User ID tidak boleh kosong");
+                return;
+            }
+
+            // Immediately disable Connect button so user doesn't double click
+            document.getElementById('connectBtn').disabled = true;
+            document.getElementById('userId').disabled = true;
+
+            const wsUrl = `ws://localhost:8090/ws?user_id=${userId}`;
+            appendLog(`Mencoba connect ke ${wsUrl}...`);
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function() {
+                appendLog('✅ Berhasil terhubung ke WebSocket server.', 'system');
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('userId').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+            };
+
+            ws.onmessage = function(event) {
+                appendLog(`⬇️ Menerima pesan: ${event.data}`, 'received');
+            };
+
+            ws.onclose = function(event) {
+                appendLog(`❌ Koneksi terputus. Kode: ${event.code}`, 'system');
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('userId').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                document.getElementById('messageInput').disabled = true;
+                document.getElementById('sendBtn').disabled = true;
+                ws = null;
+            };
+
+            ws.onerror = function(error) {
+                appendLog(`⚠️ Terjadi Error pada koneksi WebSocket! Cek console browser Anda.`, 'system');
+                console.error("WebSocket Error: ", error);
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function sendMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert("WebSocket belum terkoneksi!");
+                return;
+            }
+            const msgInput = document.getElementById('messageInput');
+            const msg = msgInput.value;
+            if (msg) {
+                ws.send(msg);
+                appendLog(`⬆️ Pesan terkirim: ${msg}`, 'sent');
+                msgInput.value = '';
+            }
+        }
+
+        // Send by pressing Enter
+        document.getElementById('messageInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>

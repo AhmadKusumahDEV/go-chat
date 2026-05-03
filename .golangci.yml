@@ -1,0 +1,106 @@
+# Simpan sebagai: .golangci.yml
+
+run:
+  # Atur versi Go yang sesuai dengan 'go.mod' proyek Anda
+  go: '1.23.0' 
+
+  # Batas waktu untuk seluruh proses linting
+  timeout: 5m
+
+  # Opsi untuk CI: Jangan gagal jika ada masalah linting baru, 
+  # tetapi tetap laporkan (berguna saat pertama kali integrasi)
+  # new: false 
+
+linters:
+  # Nonaktifkan semua linter bawaan, agar kita bisa memilih
+  # linter yang spesifik di 'enable'. Ini memberikan kontrol penuh.
+  disable-all: true
+
+  # Aktifkan linter-linter pilihan yang bernilai tinggi
+  enable:
+    # --- Linter Kualitas & Bug (Wajib) ---
+    - errcheck      # Memeriksa error yang tidak ditangani
+    - govet         # Linter bawaan Go, mendeteksi kode yang mencurigakan
+    - staticcheck   # Kumpulan linter analisis statis yang sangat kuat
+    - unused        # Menemukan kode yang tidak terpakai
+    - bodyclose     # Memeriksa HTTP response body yang lupa ditutup
+    - typecheck     # Memastikan kode valid (sama seperti `go build`)
+    - unconvert     # Menghapus konversi tipe yang tidak perlu
+    
+    # --- Linter Gaya & Keterbacaan (Standar Industri) ---
+    - goimports     # Menggantikan 'gofmt' + mengurutkan impor
+    - misspell      # Memeriksa kesalahan ejaan (typo)
+    - gocyclo       # Membatasi kompleksitas fungsi (agar tidak terlalu rumit)
+    - lll           # Membatasi panjang baris kode
+    - gocritic      # Memberikan kritik/saran gaya dan performa
+    - stylecheck    # Linter gaya (pelengkap staticcheck)
+
+    # --- Linter Keamanan (Opsional tapi bagus) ---
+    # - gosec         # Mencari celah keamanan umum (aktifkan jika perlu)
+
+linters-settings:
+  # --- Pengaturan untuk Linter Spesifik ---
+
+  goimports:
+    # Ini WAJIB diatur: Ganti dengan path modul Go Anda (dari go.mod).
+    # Ini membantu 'goimports' mengelompokkan impor internal Anda
+    # di bagian terpisah dari impor eksternal/standar.
+    local-prefixes: github.com/AhmadKusumahDEV/go-chat
+
+  gocyclo:
+    # Batas kompleksitas. 15 adalah angka awal yang wajar.
+    # Fungsi yang lebih kompleks dari ini harus di-refactor (dipecah).
+    min-complexity: 15
+
+  lll:
+    # Batas panjang baris. 120 adalah standar yang umum di banyak perusahaan.
+    line-length: 120
+    # Abaikan pemeriksaan panjang baris untuk komentar
+    exclude:
+      - \s*//
+
+  misspell:
+    # Atur lokal untuk pemeriksaan ejaan (US atau UK)
+    locale: US
+
+  unused:
+    # Periksa argumen fungsi yang tidak terpakai
+    check-parameters: true
+    # Periksa variabel lokal yang tidak terpakai
+    check-local-variables: true
+
+issues:
+  # --- Aturan Pengecualian (Sangat Penting) ---
+  # Ini adalah bagian terpenting agar linter tidak "berisik"
+
+  # Jumlah maksimum masalah yang sama yang ditampilkan
+  max-same-issues: 0 
+  # Jumlah maksimum total masalah yang ditampilkan
+  max-issues-per-linter: 0
+
+  exclude-rules:
+    # 1. Abaikan pemeriksaan 'errcheck' di semua file _test.go
+    #    (Sangat umum mengabaikan error di tes, cth: body.Close())
+    - path: _test\.go
+      linters:
+        - errcheck
+        - bodyclose
+
+    # 2. Abaikan file yang di-generate secara otomatis
+    - path: ".*_gen\\.go"
+      linters:
+        - lll
+        - stylecheck
+        - misspell
+        - govet
+
+    # 3. Abaikan kompleksitas di fungsi setup tes
+    - path: _test\.go
+      text: "cyclomatic complexity"
+      linters:
+        - gocyclo
+        
+    # 4. (Contoh) Abaikan pesan error tertentu jika memang disengaja
+    # - text: "G104: Errors unhandled"
+    #   linters:
+    #     - gosec

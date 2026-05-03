@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: cmd/api/Dockerfile
+    container_name: go_chat
+    ports:
+      - "8090:8090" #bagian kanan ini harus sama pada bagian enviroment app_port
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_started
+      redis:
+        condition: service_started
+    environment:
+      - SERVER_PORT=8090 # harus sama pada bagian ports di atas terfokus nya pada bagian kanan 
+      - GRPC_PORT=50051
+      - DATABASE_URL=postgres://main:example@postgres_db:5432/mydatabase?sslmode=disable
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - REDIS_ADDR=redis:6379
+    networks:
+      - backend-net
+
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    environment:
+      - POSTGRES_USER=main
+      - POSTGRES_PASSWORD=example
+      - POSTGRES_DB=mydatabase
+    ports:
+      - "5551:5432"
+    networks:
+      - backend-net
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U main -d mydatabase" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    image: migrate/migrate
+    container_name: migrate
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - backend-net
+    command: [ "-path", "/migrations", "-database", "postgres://main:example@postgres_db:5432/mydatabase?sslmode=disable", "up" ]
+    volumes:
+      - ./migrations:/migrations
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672" # RabbitMQ connection port
+      - "15672:15672" # Management UI port
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - backend-net
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - backend-net
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+    backend-net:
+        driver: bridge
+        external: true 
+    

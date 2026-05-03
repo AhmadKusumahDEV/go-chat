@@ -1,0 +1,94 @@
+APP_ENV: "development"
+DATABASE_URL: "postgres://second:example@localhost:5433/mydatabase?sslmode=disable"
+
+rabbitmq:
+  url: "amqp://guest:guest@localhost:5672/" # Placeholder, harus diisi
+  max_channels: 100
+  reconnect_delay: "5s"
+  prefetch_count: 0 # Default int (0)
+  prefetch_size: 0 # Default int (0)
+  heartbeat: "10s"
+  connection_name: "chat-app"
+
+oauth:
+  app_scheme: "chatapp"
+  mobile_redirect: "/(tabs)/chats"
+  GITHUB_CLIENT_ID: "{clientid for github}"
+  GITHUB_CLIENT_SECRET: "{secret for github}"
+  GITHUB_REDIRECT_URL: "your redirect url"
+  GITHUB_AUTHORIZATION_ENDPOINT: "endpoint for sigin with github"
+  GITHUB_REVOCATION_ENDPOINT: "end point revoke"
+  GOOGLE_CLIENT_ID: "your google client id"
+  GOOGLE_CLIENT_SECRET: "you secret google"
+  GOOGLE_REDIRECT_URL: "redirect url"
+  GOOGLE_AUTHORIZATION_ENDPOINT: "auth endpoint google"
+  GOOGLE_REVOCATION_ENDPOINT: "revoke google"
+
+redis:
+  addr: "localhost:6379"
+  password: "" # no password
+  db: 0
+  pool_size: 10
+  min_idle_conns: 5
+  max_idle_conns: 10
+  dial_timeout: "5s"
+  read_timeout: "3s"
+  write_timeout: "3s"
+  pool_timeout: "4s"
+  max_retries: 3
+  min_retry_backoff: "8ms"
+  max_retry_backoff: "512ms"
+  conn_max_idle_time: "30m"
+  conn_max_lifetime: "0s" # 0 berarti tidak ada batas lifetime
+
+server:
+  host: "0.0.0.0"
+  port: "8084"
+  mode: "debug" # debug, release, test
+  read_timeout: "10s"
+  write_timeout: "10s"
+  idle_timeout: "120s"
+  shutdown_timeout: "30s"
+  max_header_bytes: 1048576 # 1MB
+
+  # CORS settings
+  enable_cors: true
+  allowed_origins:
+    - "*"
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "PATCH"
+    - "DELETE"
+    - "OPTIONS"
+  allowed_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Accept"
+    - "Authorization"
+    - "X-Request-ID"
+  expose_headers:
+    - "Content-Length"
+    - "X-Request-ID"
+  allow_credentials: true
+  cors_max_age: 43200 # 12 hours
+
+  # Middleware settings
+  enable_gzip: true
+  enable_pprof: false
+  enable_request_id: true
+  enable_recovery: true
+
+  # Rate limiting
+  enable_rate_limit: true
+  rate_limit: 100
+
+  # Trusted proxies
+  trusted_proxies: []
+
+jwt:
+  RefreshSecretKey: "jfiasdfjriefgjalkfjastydjd"
+  AccessSecretKey: "kjfhasjklhifhreifhaeyufghae"
+  access_token_expiration: 60
+  refresh_token_expiration: 360

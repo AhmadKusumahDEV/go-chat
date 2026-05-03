@@ -1,0 +1,69 @@
+## ====================================================================================
+## Makefile untuk Manajemen Migrasi Database
+## ====================================================================================
+
+# Variabel yang bisa di-override dari command line.
+# Contoh: make migrate-up DB_URL="postgres://user:pass@host:port/db"
+DB_URL ?= "postgres://second:example@localhost:5433/mydatabase?sslmode=disable"
+MIGRATE_DIR ?= migrations
+
+# Perintah dasar migrate yang akan kita gunakan kembali.
+# Ini membuat target di bawah menjadi lebih bersih.
+MIGRATE_CMD = migrate -path $(MIGRATE_DIR) -database "$(DB_URL)"
+GOLANGCI_LINT_BIN := golangci-lint
+
+## --------------------------------------
+## Target Bantuan (Help)
+## --------------------------------------
+.PHONY: help
+help: ## Menampilkan daftar perintah yang tersedia
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+## --------------------------------------
+## Setup & Instalasi
+## --------------------------------------
+.PHONY: migrate-install
+migrate-install: ## Menginstal golang-migrate CLI (hanya perlu sekali)
+	@echo "--> Menginstal golang-migrate CLI..."
+	@go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
+## --------------------------------------
+## Perintah Migrasi Database
+## --------------------------------------
+.PHONY: migrate-create
+migrate-create: ## Membuat file migrasi baru. Contoh: make migrate-create NAME=create_users_table
+	@echo "--> Membuat file migrasi baru dengan nama: $(NAME)"
+	@migrate create -ext sql -dir $(MIGRATE_DIR) -seq $(NAME)
+
+.PHONY: migrate-up
+migrate-up: ## Menjalankan semua migrasi yang tertunda (up)
+	@echo "--> Menjalankan semua migrasi (up)..."
+	@$(MIGRATE_CMD) up
+
+.PHONY: migrate-up-one
+migrate-up-one: ## Menjalankan satu migrasi berikutnya (up 1)
+	@echo "--> Menjalankan satu migrasi (up 1)..."
+	@$(MIGRATE_CMD) up 1
+
+.PHONY: migrate-down-one
+migrate-down-one: ## Membatalkan satu migrasi terakhir (down 1)
+	@echo "--> Membatalkan satu migrasi terakhir (down 1)..."
+	@$(MIGRATE_CMD) down 1
+
+.PHONY: migrate-version
+migrate-version: ## Memeriksa versi migrasi saat ini
+	@echo "--> Memeriksa versi migrasi..."
+	@$(MIGRATE_CMD) version
+
+# .PHONY harus sama dengan nama target di bawahnya (yaitu 'linter')
+.PHONY: linter-fix
+linter-fix: ## menjalankan linter
+	@echo "--> menjalankan linter (dengan perbaikan otomatis)..."
+	# Kita panggil 'binary' dan tambahkan argumennya di sini
+	@$(GOLANGCI_LINT_BIN) run --fix ./...
+
+# bagus untuk CI (Continuous Integration)
+.PHONY: linter
+linter: ## menjalankan linter (hanya check, tanpa fix)
+	@echo "--> menjalankan linter (hanya check)..."
+	golang-ci lint --fix
