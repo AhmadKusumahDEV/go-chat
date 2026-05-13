@@ -42,23 +42,23 @@ func main() {
 	if err != nil {
 		log.Println("cannot load config:", err)
 	}
-	log.Println(cfg.Firebase)
+	// log.Println(cfg.Firebase)
 
-	app, err := config.InitFirebase(appContext, "chat-appliaction-19fd5", cfg.Firebase.Path)
-	log.Println(err)
-	if err != nil {
-		log.Println("cannot init firebase:", err)
-	}
+	// app, err := config.InitFirebase(appContext, "chat-appliaction-19fd5", cfg.Firebase.Path)
+	// log.Println(err)
+	// if err != nil {
+	// 	log.Println("cannot init firebase:", err)
+	// }
 
-	clientmessage, err := app.Messaging(appContext)
-	if err != nil {
-		log.Println("cannot setup message firebase:", err)
-	}
+	// clientmessage, err := app.Messaging(appContext)
+	// if err != nil {
+	// 	log.Println("cannot setup message firebase:", err)
+	// }
 
-	err = config.SendToDevice(appContext, clientmessage, "fH743pD6QnGKoMPv53JyOC:APA91bFTc8B8orxqrdsEDagmCHbrNDPyD27QUOinrhHAbuIecnhrO1jF5EFDRDCY5yYq6Bv-IpcN99ps6NzOg_RCVvB2JVF9rlEA29cBwasBB37fG4PtVFU")
-	if err != nil {
-		log.Println("cannot setup message firebase:", err)
-	}
+	// err = config.SendToDevice(appContext, clientmessage, "fH743pD6QnGKoMPv53JyOC:APA91bFTc8B8orxqrdsEDagmCHbrNDPyD27QUOinrhHAbuIecnhrO1jF5EFDRDCY5yYq6Bv-IpcN99ps6NzOg_RCVvB2JVF9rlEA29cBwasBB37fG4PtVFU")
+	// if err != nil {
+	// 	log.Println("cannot setup message firebase:", err)
+	// }
 
 	log.Println(cfg.DatabaseURL)
 	log.Println(cfg.Redis)
@@ -100,10 +100,11 @@ func main() {
 	usersRepository := repository.NewUserRepository(db)
 	oauthStatesRepository := repository.NewOauthStatesRepository(db)
 	messageRepository := repository.NewMessageRepository(db)
+	firebaseRepository := repository.NewFirebaseRepository(db)
 
 	//services
 	roomServices := services.NewRoomServices(roomRepository, memberRepository, newClientRedis, validate)
-	usersServices := services.NewUsersServices(usersRepository, cfg.Jwt)
+	usersServices := services.NewUsersServices(usersRepository, firebaseRepository, cfg.Jwt)
 	oauthServices := services.NewOauthServices(cfg, newClientRedis, oauthStatesRepository, usersRepository)
 	messageServices := services.NewMessageServices(messageRepository, memberRepository)
 	memberServices := services.NewMemberServices(roomRepository, memberRepository, newClientRedis, validate)

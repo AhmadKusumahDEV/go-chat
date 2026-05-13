@@ -36,47 +36,62 @@ func (r *RepositoryFirebaseImpl) CreateFcmToken(ctx context.Context, firebase *m
         AND fcm_token <> $2
         AND is_active = TRUE;
     `
-	_, err = tx.ExecContext(ctx, qDeactivateOldToken, firebase.UserID, firebase.InstallationID, firebase.FcmToken)
-	if err != nil && err != sql.ErrNoRows {
-		return errors.New("failed when updated deactive token")
+
+	_, err = tx.ExecContext(
+		ctx,
+		qDeactivateOldToken,
+		firebase.InstallationID,
+		firebase.FcmToken,
+	)
+	if err != nil {
+		return errors.New("failed when update deactivate token")
 	}
 
 	qUpsertFcmToken := `
-	INSERT INTO user_devices (
-    user_id,
-    installation_id,
-    fcm_token,
-    platform,
-    is_active,
-    logged_out_at,
-    last_seen_at,
-    created_at,
-    updated_at
+        INSERT INTO user_devices (
+			user_id,
+            installation_id,
+            fcm_token,
+            platform,
+            is_active,
+            logged_out_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            $1, $2, $3, $4,
+            TRUE,
+            NULL,
+            NOW(),
+            NOW()
+        )
+        ON CONFLICT (fcm_token)
+        DO UPDATE SET
+            user_id = EXCLUDED.user_id,
+            installation_id = EXCLUDED.installation_id,
+            platform = EXCLUDED.platform,
+            is_active = TRUE,
+            logged_out_at = NULL,
+            updated_at = NOW();
+    `
+
+	_, err = tx.ExecContext(
+		ctx,
+		qUpsertFcmToken,
+		firebase.UserID,
+		firebase.InstallationID,
+		firebase.FcmToken,
+		firebase.Platform,
 	)
-	VALUES (
-		$1, $2, $3, $4,
-		TRUE,
-		NULL,
-		NOW(),
-		NOW(),
-		NOW()
-	)
-	ON CONFLICT (fcm_token)
-	DO UPDATE SET
-    user_id = EXCLUDED.user_id,
-    installation_id = EXCLUDED.installation_id,
-    platform = EXCLUDED.platform,
-    is_active = TRUE,
-    logged_out_at = NULL,
-    last_seen_at = NOW(),
-    updated_at = NOW();
-	`
-	_, err = tx.ExecContext(ctx, qUpsertFcmToken, firebase.UserID, firebase.InstallationID, firebase.FcmToken, firebase.Platform)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil {
 		return errors.New("failed when upsert fcm token")
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return errors.New("failed when commit transaction")
+	}
+
+	return nil
 }
 
 func NewFirebaseRepository(db *sql.DB) RepositoryFirebase {

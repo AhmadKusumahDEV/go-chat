@@ -160,9 +160,10 @@ func (u *UsersServivesImpl) StoreFirebaseToken(ctx context.Context, fcm *request
 	return nil
 }
 
-func NewUsersServices(userRepository repository.RepositoryUser, jwtConfig config.JwtConfig) UsersServices {
+func NewUsersServices(userRepository repository.RepositoryUser, firebase repository.RepositoryFirebase, jwtConfig config.JwtConfig) UsersServices {
 	return &UsersServivesImpl{
-		userRepository: userRepository,
-		jwtConfig:      jwtConfig,
+		userRepository:     userRepository,
+		firebaseRepository: firebase,
+		jwtConfig:          jwtConfig,
 	}
 }
