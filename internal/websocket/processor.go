@@ -75,7 +75,6 @@ func (mp *MessageProcessorImpl) worker(id int) {
 
 // processMessage handles individual messages
 func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
-	// Create broadcast message with additional processing
 	var broadcastMsg BroadcastMessage
 	err := json.Unmarshal(msg.Message, &broadcastMsg)
 	if err != nil {
@@ -96,9 +95,9 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 	case "message_group":
 		mp.hub.BroadcastToRoom(broadcastMsg.RoomID, broadcastMsg.Data)
 	case "join_room":
-		mp.hub.subscribeToRoom(broadcastMsg.RoomID, msg.Client)
+		mp.hub.SubscribeToRoom(broadcastMsg.RoomID, msg.Client)
 	case "leave_room":
-		mp.hub.unsubscribeFromRoom(broadcastMsg.RoomID, msg.Client)
+		mp.hub.UnsubscribeFromRoom(broadcastMsg.RoomID, msg.Client)
 	}
 }
 

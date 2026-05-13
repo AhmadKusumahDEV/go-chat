@@ -1,12 +1,10 @@
 package websocket
 
 import (
-	"context"
 	"log"
 	"sync"
 	"time"
 
-	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
 	"github.com/gorilla/websocket"
 )
 
@@ -18,17 +16,19 @@ type WebSocketManager interface {
 	GetManagerStats() ManagerStats
 	collectStats()
 	updateStats(updateFunc func(*ManagerStats))
+	SendNotificationToUser(userID string, notification []byte) error
+	SendNotificationToAll(notification []byte)
+	GetConnectedUsers() []string
 }
 
 // WebSocketManagerImpl implements WebSocketManager interface
 type WebSocketManagerImpl struct {
-	hub            WebSocketHub
-	processor      WebsocketProcessor
-	shutdown       chan struct{}
-	wg             sync.WaitGroup
-	stats          *ManagerStats
-	statsMutex     sync.RWMutex
-	roomRepository repository.RepositoryRoom
+	hub        WebSocketHub
+	processor  WebsocketProcessor
+	shutdown   chan struct{}
+	wg         sync.WaitGroup
+	stats      *ManagerStats
+	statsMutex sync.RWMutex
 }
 
 type ManagerStats struct {
@@ -47,7 +47,7 @@ type BroadcastMessage struct {
 }
 
 // NewWebSocketManager creates a new WebSocket manager
-func NewWebSocketManager(roomRepository repository.RepositoryRoom) WebSocketManager {
+func NewWebSocketManager() WebSocketManager {
 	hub := NewHub()
 	processor := NewMessageProcessor(10, hub)
 
@@ -58,7 +58,6 @@ func NewWebSocketManager(roomRepository repository.RepositoryRoom) WebSocketMana
 		stats: &ManagerStats{
 			StartTime: time.Now(),
 		},
-		roomRepository: roomRepository,
 	}
 
 	return manager
@@ -100,13 +99,6 @@ func (m *WebSocketManagerImpl) Stop() {
 
 // HandleConnection creates a new client and starts communication
 func (m *WebSocketManagerImpl) HandleConnection(conn *websocket.Conn, userID string) {
-	rooms, err := m.roomRepository.FindAllRoomByUserID(context.Background(), userID)
-	if err != nil {
-		log.Printf("Error finding rooms for user %s: %v", userID, err)
-		conn.Close()
-		return
-	}
-
 	m.updateStats(func(stats *ManagerStats) {
 		stats.TotalConnections++
 		stats.ActiveClients++
@@ -122,10 +114,6 @@ func (m *WebSocketManagerImpl) HandleConnection(conn *websocket.Conn, userID str
 	}
 
 	m.hub.Register(c)
-
-	for _, room := range rooms {
-		m.hub.subscribeToRoom(room.ID.String(), c)
-	}
 
 	// 4. Start client goroutines
 	m.wg.Add(2)
@@ -187,4 +175,16 @@ func (m *WebSocketManagerImpl) updateStats(updateFunc func(*ManagerStats)) {
 	m.statsMutex.Lock()
 	defer m.statsMutex.Unlock()
 	updateFunc(m.stats)
+}
+
+func (m *WebSocketManagerImpl) SendNotificationToUser(userID string, notification []byte) error {
+	return m.hub.BroadcastToUser(userID, notification)
+}
+
+func (m *WebSocketManagerImpl) SendNotificationToAll(notification []byte) {
+	m.hub.BroadcastToAllUsers(notification)
+}
+
+func (m *WebSocketManagerImpl) GetConnectedUsers() []string {
+	return m.hub.GetAllConnectedUsers()
 }

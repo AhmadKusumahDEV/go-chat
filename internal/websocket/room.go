@@ -75,9 +75,7 @@ func (r *Room) handleRegister(client *Client) {
 // handleUnregister removes a client from the room
 func (r *Room) handleUnregister(client *Client) {
 	r.mutex.Lock()
-	if _, exists := r.clients[client.UserID]; exists {
-		delete(r.clients, client.UserID)
-	}
+	delete(r.clients, client.UserID)
 	r.mutex.Unlock()
 
 	log.Printf("User %s left room %s", client.UserID, r.ID)

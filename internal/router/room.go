@@ -18,17 +18,13 @@ func (r *RoomRoutes) RegisterRoutes(router *gin.Engine, srv *config.Server) {
 
 	// roomgroup.GET("/", r.handle.HandleGetAllRoom)
 	roomgroup.GET("/", r.handle.HandleGetRoomByUserID)
-	roomgroup.GET("/:id/members", r.handle.HandlerGetRoomMembers)
 	roomgroup.GET("/search", r.handle.HandleGetRoomByName)
 
 	roomgroup.POST("/", r.handle.HandleCreateRoom)
-	roomgroup.POST("/join", r.handle.HandleJoinRoom)
-	roomgroup.POST("/:id/leave", r.handle.HandleLeaveRoom)
 
 	roomgroup.PUT("/:id", r.handle.HandlerUpdatedRoom)
 
 	roomgroup.DELETE("/:id", r.handle.HandlerDeleteRoom)
-	roomgroup.DELETE("/:id/members", r.handle.HandleRemoveMember)
 }
 
 func NewRoomRouter(handler handlers.HandlerRoom) config.RouteRegistrar {

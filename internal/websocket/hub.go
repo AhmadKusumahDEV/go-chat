@@ -1,8 +1,10 @@
 package websocket
 
 import (
+	"errors"
 	"log"
 	"sync"
+	"time"
 )
 
 type WebSocketHub interface {
@@ -13,12 +15,15 @@ type WebSocketHub interface {
 	BroadcastToRoomExcept(roomID string, message []byte, exceptUserID string)
 	GetRoomClients(roomID string) int
 	GetRoom(roomID string) WebSocketRoom
+	HandleBroadcast(message *BroadcastMessage)
+	GetRoomCount() int
+	SubscribeToRoom(roomID string, client *Client)
 	handleRegister(client *Client)
 	handleUnregister(client *Client)
-	handleBroadcast(message *BroadcastMessage)
-	GetRoomCount() int
-	subscribeToRoom(roomID string, client *Client)
-	unsubscribeFromRoom(roomID string, client *Client)
+	UnsubscribeFromRoom(roomID string, client *Client)
+	BroadcastToUser(userID string, message []byte) error
+	BroadcastToAllUsers(message []byte)
+	GetAllConnectedUsers() []string
 }
 
 // Hub implements WebSocketHub interface
@@ -54,7 +59,7 @@ func (h *Hub) Run(signal chan struct{}) {
 			h.handleUnregister(client)
 
 		case message := <-h.broadcast:
-			h.handleBroadcast(message)
+			h.HandleBroadcast(message)
 
 		case <-signal:
 			return
@@ -63,7 +68,7 @@ func (h *Hub) Run(signal chan struct{}) {
 }
 
 // unsubscribeFromRoom implements WebSocketHub.
-func (h *Hub) subscribeToRoom(roomID string, client *Client) {
+func (h *Hub) SubscribeToRoom(roomID string, client *Client) {
 	defer h.mutex.Unlock()
 	h.mutex.Lock()
 	room, exists := h.rooms[roomID]
@@ -78,7 +83,7 @@ func (h *Hub) subscribeToRoom(roomID string, client *Client) {
 	log.Printf("Client %s joined room %s", client.UserID, roomID)
 }
 
-func (h *Hub) unsubscribeFromRoom(roomID string, client *Client) {
+func (h *Hub) UnsubscribeFromRoom(roomID string, client *Client) {
 	h.mutex.Lock()
 	room, exists := h.rooms[roomID]
 	h.mutex.Unlock()
@@ -102,18 +107,23 @@ func (h *Hub) unsubscribeFromRoom(roomID string, client *Client) {
 // handleRegister processes client registration
 func (h *Hub) handleRegister(Client *Client) {
 	h.mutex.Lock()
-	h.client[Client] = true
-	h.mutex.Unlock()
+	defer h.mutex.Unlock()
 
+	for c := range h.client {
+		if c.UserID == Client.UserID {
+			log.Printf("Client %s already registered", Client.UserID)
+			return
+		}
+	}
+
+	h.client[Client] = true
 	log.Printf("register Client %s", Client.UserID)
 }
 
 // handleUnregister processes client removal
 func (h *Hub) handleUnregister(client *Client) {
 	h.mutex.Lock()
-	if _, ok := h.client[client]; ok {
-		delete(h.client, client)
-	}
+	delete(h.client, client)
 
 	// Copy active rooms to remove client
 	var activeRooms []WebSocketRoom
@@ -130,8 +140,8 @@ func (h *Hub) handleUnregister(client *Client) {
 	log.Printf("Client %s unregistered from Hub", client.UserID)
 }
 
-// handleBroadcast processes message broadcasting
-func (h *Hub) handleBroadcast(message *BroadcastMessage) {
+// HandleBroadcast processes message broadcasting
+func (h *Hub) HandleBroadcast(message *BroadcastMessage) {
 	h.mutex.RLock()
 	room, exists := h.rooms[message.RoomID]
 	h.mutex.RUnlock()
@@ -191,4 +201,52 @@ func (h *Hub) GetRoomCount() int {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 	return len(h.rooms)
+}
+
+func (h *Hub) BroadcastToUser(userID string, message []byte) error {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	for client := range h.client {
+		if client.UserID == userID {
+			select {
+			case client.Send <- message:
+				return nil
+			case <-time.After(5 * time.Second):
+				return errors.New("timeout sending notification to user")
+			}
+		}
+	}
+
+	return errors.New("user not connected")
+}
+
+func (h *Hub) BroadcastToAllUsers(message []byte) {
+	h.mutex.RLock()
+	clients := make([]*Client, 0, len(h.client))
+	for client := range h.client {
+		clients = append(clients, client)
+	}
+	h.mutex.RUnlock()
+	log.Println(clients)
+	log.Println(message)
+	for _, client := range clients {
+		select {
+		case client.Send <- message:
+			// Success
+		case <-time.After(2 * time.Second):
+			log.Printf("Timeout sending notification to user %s", client.UserID)
+		}
+	}
+}
+
+func (h *Hub) GetAllConnectedUsers() []string {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	users := make([]string, 0, len(h.client))
+	for client := range h.client {
+		users = append(users, client.UserID)
+	}
+	return users
 }

@@ -56,3 +56,25 @@ type GoogleTokenResponse struct {
 	Scope        string `json:"scope"`
 	Error        string `json:"error,omitempty"`
 }
+
+// {
+//   "room_id": "uuid-room-1",
+//   "type": "message_group",
+//   "data": {
+//     "title": "Room Nongkrong",
+//     "body": "Ahmad: Hey everyone!",
+//     "sender_id": "uuid-user-1",
+//     "sender_name": "Ahmad Fatur",
+//     "message_id": "uuid-msg-1"
+//   }
+// }
+
+type NotificationResponse struct {
+	RoomID 	   string `json:"room_id"`
+	Type   	   string `json:"type"`
+	Title      string `json:"title"`
+	Body       string `json:"body"`
+	SenderID   string `json:"sender_id"`
+	SenderName string `json:"sender_name"`
+	MessageID  string `json:"message_id"`
+}

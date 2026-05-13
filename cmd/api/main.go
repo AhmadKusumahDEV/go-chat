@@ -18,7 +18,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/rabbitmq/amqp091-go"
-	// "github.com/AhmadKusumahDEV/go-chat/internal/config"
 )
 
 // var upgrade websocket.Upgrader = websocket.Upgrader{
@@ -43,10 +42,24 @@ func main() {
 	if err != nil {
 		log.Println("cannot load config:", err)
 	}
+	log.Println(cfg.Firebase)
 
-	log.Println(cfg.Jwt)
-	log.Println(cfg.OAuth)
-	log.Println(cfg.Server)
+	app, err := config.InitFirebase(appContext, "chat-appliaction-19fd5", cfg.Firebase.Path)
+	log.Println(err)
+	if err != nil {
+		log.Println("cannot init firebase:", err)
+	}
+
+	clientmessage, err := app.Messaging(appContext)
+	if err != nil {
+		log.Println("cannot setup message firebase:", err)
+	}
+
+	err = config.SendToDevice(appContext, clientmessage, "fH743pD6QnGKoMPv53JyOC:APA91bFTc8B8orxqrdsEDagmCHbrNDPyD27QUOinrhHAbuIecnhrO1jF5EFDRDCY5yYq6Bv-IpcN99ps6NzOg_RCVvB2JVF9rlEA29cBwasBB37fG4PtVFU")
+	if err != nil {
+		log.Println("cannot setup message firebase:", err)
+	}
+
 	log.Println(cfg.DatabaseURL)
 	log.Println(cfg.Redis)
 	log.Println(cfg.RabbitMQ)
@@ -73,6 +86,14 @@ func main() {
 
 	newClientRedis := cahce.NewClientRedis(rds)
 
+	// webscoket Manager
+	manager := websocket.NewWebSocketManager()
+	manager.Start()
+	wsHandler := handlers.NewWebsocketHandler(manager)
+	wsRouter := router.NewWebsocketRouter(wsHandler)
+
+	defer manager.Stop()
+
 	// repostiory
 	roomRepository := repository.NewRoomRepository(db)
 	memberRepository := repository.NewMemberRepository(db)
@@ -85,30 +106,25 @@ func main() {
 	usersServices := services.NewUsersServices(usersRepository, cfg.Jwt)
 	oauthServices := services.NewOauthServices(cfg, newClientRedis, oauthStatesRepository, usersRepository)
 	messageServices := services.NewMessageServices(messageRepository, memberRepository)
+	memberServices := services.NewMemberServices(roomRepository, memberRepository, newClientRedis, validate)
 
 	//handler
 	roomHandler := handlers.NewRoomHandler(roomServices)
 	UsersHandler := handlers.NewUserHandler(usersServices)
 	oauthHandler := handlers.NewHandlerOauth(oauthServices)
 	messageHandler := handlers.NewMessageHandler(messageServices)
+	memberHandler := handlers.NewMemberHandler(memberServices)
 
 	// router
 	roomRouter := router.NewRoomRouter(roomHandler)
 	UsersRouter := router.NewUsersRouter(UsersHandler)
 	authRouter := router.NewAuthRouter(oauthHandler)
 	messageRouter := router.NewMessageRouter(messageHandler)
+	memberRouter := router.NewMemberRouter(memberHandler)
 
 	if err != nil {
 		panic(err)
 	}
-
-	manager := websocket.NewWebSocketManager(roomRepository)
-	manager.Start()
-
-	defer manager.Stop()
-
-	wsHandler := handlers.NewWebsocketHandler(manager)
-	wsRouter := router.NewWebsocketRouter(wsHandler)
 
 	server := config.NewServer(&cfg.Server, &config.Dependencies{RedisClient: rds, JwtConfig: cfg.Jwt})
 
@@ -126,7 +142,7 @@ func main() {
 		})
 	})
 
-	server.RegisterRoutes(roomRouter, UsersRouter, wsRouter, authRouter, messageRouter)
+	server.RegisterRoutes(roomRouter, UsersRouter, wsRouter, authRouter, messageRouter, memberRouter)
 
 	err = server.Start()
 

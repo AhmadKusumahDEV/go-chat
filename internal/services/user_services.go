@@ -12,16 +12,21 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/helpers"
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
+	"github.com/gofrs/uuid"
 )
 
 type UsersServices interface {
 	LoginUser(ctx context.Context, req *request.LoginRequest) (*response.JwtReponse, error)
 	RegisterUser(ctx context.Context, req *request.RegisterRequest) error
 	RefreshUser(ctx context.Context, req *request.RefreshRequest) (*response.JwtReponse, error)
+	GetAllUser(ctx context.Context) ([]*response.UserResponse, error)
+	StoreFirebaseToken(ctx context.Context, fcm *request.FcmRequest, userId uuid.UUID) error
 }
 
 type UsersServivesImpl struct {
-	repo      repository.RepositoryUser
+	userRepository     repository.RepositoryUser
+	firebaseRepository repository.RepositoryFirebase
+
 	jwtConfig config.JwtConfig
 }
 
@@ -32,7 +37,7 @@ func (u *UsersServivesImpl) LoginUser(ctx context.Context, req *request.LoginReq
 	mu.Lock()
 	defer mu.Unlock()
 
-	users, err := u.repo.FindByEmail(ctx, req.Email)
+	users, err := u.userRepository.FindByEmail(ctx, req.Email)
 
 	if err != nil {
 		return nil, errors.New("user not found")
@@ -40,8 +45,8 @@ func (u *UsersServivesImpl) LoginUser(ctx context.Context, req *request.LoginReq
 
 	userinfo := models.JwtUsersInfo{
 		UserID:   users.ID.String(),
-		Username: users.Username,
 		Email:    users.Email,
+		Username: users.Username,
 	}
 
 	if !helpers.ValidatePassword(req.Password, users.Password) {
@@ -79,9 +84,9 @@ func (u *UsersServivesImpl) RefreshUser(ctx context.Context, req *request.Refres
 		return nil, errors.New("invalid claims format")
 	}
 
-	userID := fmt.Sprintf("%v", userInfoVal["UserID"])
-	email := fmt.Sprintf("%v", userInfoVal["Email"])
-	username := fmt.Sprintf("%v", userInfoVal["Username"])
+	userID := fmt.Sprintf("%v", userInfoVal["user_id"])
+	email := fmt.Sprintf("%v", userInfoVal["email"])
+	username := fmt.Sprintf("%v", userInfoVal["username"])
 
 	userinfo := models.JwtUsersInfo{
 		UserID:   userID,
@@ -118,7 +123,7 @@ func (u *UsersServivesImpl) RegisterUser(ctx context.Context, req *request.Regis
 		Password: password,
 	}
 
-	err := u.repo.Create(ctx, &dtoToModels)
+	err := u.userRepository.Create(ctx, &dtoToModels)
 
 	if err != nil {
 		return errors.New("failed to create user")
@@ -127,9 +132,37 @@ func (u *UsersServivesImpl) RegisterUser(ctx context.Context, req *request.Regis
 	return nil
 }
 
-func NewUsersServices(repo repository.RepositoryUser, jwtConfig config.JwtConfig) UsersServices {
+func (u *UsersServivesImpl) GetAllUser(ctx context.Context) ([]*response.UserResponse, error) {
+	users, err := u.userRepository.FindAll(ctx)
+
+	userConvert := helpers.UserResponses(users)
+
+	if err != nil {
+		return nil, errors.New("failed to get users")
+	}
+
+	return userConvert, nil
+}
+
+func (u *UsersServivesImpl) StoreFirebaseToken(ctx context.Context, fcm *request.FcmRequest, userId uuid.UUID) error {
+	dtoToModels := models.Firebase{
+		UserID:         userId,
+		InstallationID: fcm.Installation,
+		FcmToken:       fcm.FcmToken,
+		Platform:       fcm.Platform,
+	}
+
+	err := u.firebaseRepository.CreateFcmToken(ctx, &dtoToModels)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func NewUsersServices(userRepository repository.RepositoryUser, jwtConfig config.JwtConfig) UsersServices {
 	return &UsersServivesImpl{
-		repo:      repo,
-		jwtConfig: jwtConfig,
+		userRepository: userRepository,
+		jwtConfig:      jwtConfig,
 	}
 }

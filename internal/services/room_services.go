@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/cahce"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
@@ -12,9 +11,9 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/helpers"
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
+	"github.com/AhmadKusumahDEV/go-chat/internal/websocket"
 	"github.com/go-playground/validator/v10"
 	"github.com/gofrs/uuid"
-	"github.com/redis/go-redis/v9"
 )
 
 type RoomService interface {
@@ -24,10 +23,6 @@ type RoomService interface {
 	DeleteRoom(ctx context.Context, roomID string, deletedBy string) error
 	GetRoomByUserID(ctx context.Context, userID string) ([]*response.RoomResponse, error)
 	GetRoomByName(ctx context.Context, room_name request.GetRoomByName) ([]*response.RoomResponse, error)
-	AddRoomMember(ctx context.Context, member request.AddMember) error
-	GetRoomMembers(ctx context.Context, roomID string) ([]*response.MemberResponse, error)
-	LeaveRoom(ctx context.Context, roomID string, userID string) error
-	RemoveRoomMember(ctx context.Context, roomID string, targetUserID string, removedByUserID string) error
 }
 
 type RoomServiceImpl struct {
@@ -35,6 +30,7 @@ type RoomServiceImpl struct {
 	memberRepository repository.RepositoryMembers
 	cahce            cahce.CahceRedis
 	validate         *validator.Validate
+	manager          websocket.WebSocketManager
 }
 
 // GetRoomByName implements RoomService.
@@ -56,52 +52,6 @@ func (r *RoomServiceImpl) GetRoomByName(ctx context.Context, room_name request.G
 	return helpers.RoomResponses(model), nil
 }
 
-// AddRoomMember implements RoomService.
-func (r *RoomServiceImpl) AddRoomMember(ctx context.Context, member request.AddMember) error {
-	err := r.validate.Struct(member)
-	if err != nil {
-		log.Println("error on services layer with name AddRoomMember in validate process", err)
-		return err
-	}
-
-	// Check if room is private — only admin can add members
-	room, err := r.roomRepository.FindByID(ctx, member.RoomID)
-	if err != nil {
-		return errors.New("room not found")
-	}
-
-	if room.Isprivate {
-		adder, err := r.memberRepository.FindMember(ctx, member.RoomID, member.AddMemberBy)
-		if err != nil {
-			return errors.New("forbidden: you are not a member of this room")
-		}
-		if adder.Role != "admin" {
-			return errors.New("forbidden: only admin can add members to private rooms")
-		}
-	}
-
-	members, err := member.ToModel()
-	if err != nil {
-		return err
-	}
-
-	err = r.memberRepository.Create(ctx, members)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		bgctx := context.Background()
-		key := "rooms:%s:members" + member.RoomID
-		err := r.cahce.Del(bgctx, key)
-		if err != nil {
-			log.Println("error on services layer with name AddRoomMember when delete cache ", err)
-		}
-	}()
-
-	return nil
-}
-
 // CreateRoom implements RoomService.
 func (r *RoomServiceImpl) CreateRoom(ctx context.Context, req *request.CreateRoomRequest, create_by string) error {
 	err := r.validate.Struct(req)
@@ -120,13 +70,34 @@ func (r *RoomServiceImpl) CreateRoom(ctx context.Context, req *request.CreateRoo
 
 	// Create a new member profile for the creator as an admin
 	creatorUUID, _ := uuid.FromString(create_by)
-	member := &models.Members{
-		Userid:  creatorUUID,
-		AddedBy: creatorUUID,
-		Role:    "admin",
+
+	members := []*models.Members{
+		{
+			Userid:  creatorUUID,
+			AddedBy: creatorUUID,
+			Role:    "admin",
+		},
 	}
 
-	err = r.roomRepository.CreateWithMember(ctx, room, member)
+	for _, memberIDStr := range req.Members {
+		if memberIDStr == create_by {
+			continue
+		}
+
+		memberUUID, err := uuid.FromString(memberIDStr)
+		if err != nil {
+			log.Printf("invalid member uuid provided: %s", memberIDStr)
+			continue // or return error, but skipping is more tolerant
+		}
+
+		members = append(members, &models.Members{
+			Userid:  memberUUID,
+			AddedBy: creatorUUID,
+			Role:    "member",
+		})
+	}
+
+	err = r.roomRepository.CreateWithMember(ctx, room, members)
 
 	if err != nil {
 		return err
@@ -196,65 +167,14 @@ func (r *RoomServiceImpl) GetAllRoomUser(ctx context.Context) ([]*response.RoomR
 	return helpers.RoomResponses(model), nil
 }
 
-// GetRoomMembers implements RoomService.
-func (r *RoomServiceImpl) GetRoomMembers(ctx context.Context, roomID string) ([]*response.MemberResponse, error) {
-	var member []*response.MemberResponse
-	key := "rooms:%s:members" + roomID
-	err := r.cahce.Get(ctx, key, &member)
-
-	if err == nil {
-		return member, nil
-	}
-
-	model, err := r.roomRepository.FindMemberRoom(ctx, roomID)
-
-	if err != nil {
-		log.Println("error on servies layer with name GetRoomMembers when get from database ", err)
-		return nil, err
-	}
-
-	go func() {
-		bgctx := context.Background()
-		err := r.cahce.Set(bgctx, key, helpers.MemberResponses(model), 120*time.Minute)
-		if err != nil {
-			log.Println("error on servies layer with name GetRoomMembers when set redis ", err)
-		}
-	}()
-
-	return helpers.MemberResponses(model), nil
-}
-
 // ListUserRooms implements RoomService.
 func (r *RoomServiceImpl) GetRoomByUserID(ctx context.Context, userID string) ([]*response.RoomResponse, error) {
-	var rooms []*response.RoomResponse
-	key := "rooms:userid:" + userID
-	err := r.cahce.Get(ctx, key, &rooms)
-
-	if err != nil {
-		if err == redis.Nil {
-			log.Println("[CACHE MISS] Data belum ada, lanjut query ke DB.")
-		} else {
-			log.Printf("[CACHE ERROR] Gawat! Redis Error: %v", err)
-		}
-	} else {
-		return rooms, nil
-	}
-
 	model, err := r.roomRepository.FindAllRoomByUserID(ctx, userID)
 
 	if err != nil {
 		log.Println("error on servies layer with name GetRoomByUserID ", err)
 		return nil, err
 	}
-
-	go func() {
-		bgctx := context.Background()
-		err := r.cahce.Set(bgctx, key, helpers.RoomResponses(model), 15*time.Minute)
-
-		if err != nil {
-			log.Println("error on servies layer with name GetRoomByUserID when set redis ", err)
-		}
-	}()
 
 	return helpers.RoomResponses(model), nil
 }
@@ -286,72 +206,6 @@ func (r *RoomServiceImpl) UpdateRoom(ctx context.Context, roomID string, userID 
 	if err := r.roomRepository.Update(ctx, existingRoom); err != nil {
 		return err
 	}
-
-	return nil
-}
-
-// LeaveRoom implements RoomService.
-func (r *RoomServiceImpl) LeaveRoom(ctx context.Context, roomID string, userID string) error {
-	// Check membership
-	member, err := r.memberRepository.FindMember(ctx, roomID, userID)
-	if err != nil {
-		return errors.New("you are not a member of this room")
-	}
-
-	// Prevent sole admin from leaving
-	if member.Role == "admin" {
-		members, err := r.roomRepository.FindMemberRoom(ctx, roomID)
-		if err != nil {
-			return err
-		}
-
-		adminCount := 0
-		for _, m := range members {
-			if m.Role == "admin" {
-				adminCount++
-			}
-		}
-		if adminCount <= 1 {
-			return errors.New("cannot leave: you are the only admin, transfer ownership first")
-		}
-	}
-
-	err = r.memberRepository.RemoveMember(ctx, roomID, userID)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		_ = r.cahce.Del(context.Background(), "rooms:%s:members"+roomID)
-	}()
-
-	return nil
-}
-
-// RemoveRoomMember implements RoomService.
-func (r *RoomServiceImpl) RemoveRoomMember(ctx context.Context, roomID string, targetUserID string, removedByUserID string) error {
-	// RBAC: only admin can remove members
-	admin, err := r.memberRepository.FindMember(ctx, roomID, removedByUserID)
-	if err != nil {
-		return errors.New("forbidden: you are not a member of this room")
-	}
-	if admin.Role != "admin" {
-		return errors.New("forbidden: only admin can remove members")
-	}
-
-	// Cannot remove yourself via this endpoint
-	if targetUserID == removedByUserID {
-		return errors.New("use leave endpoint to remove yourself")
-	}
-
-	err = r.memberRepository.RemoveMember(ctx, roomID, targetUserID)
-	if err != nil {
-		return errors.New("member not found in this room")
-	}
-
-	go func() {
-		_ = r.cahce.Del(context.Background(), "rooms:%s:members"+roomID)
-	}()
 
 	return nil
 }

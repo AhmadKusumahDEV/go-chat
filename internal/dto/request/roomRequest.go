@@ -1,18 +1,22 @@
 package request
 
 import (
+	"time"
+
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
 	"github.com/gofrs/uuid"
 )
 
 type CreateRoomRequest struct {
-	Name        string `json:"name" validate:"required,min=3,max=100"`
-	Description string `json:"description" validate:"max=500"`
-	RoomType    string `json:"room_type" validate:"required,oneof=group direct channel"`
-	IsPrivate   *bool  `json:"is_private" validate:"required"` // Menggunakan pointer *bool untuk membedakan antara false dan tidak diisi.
+	Name        string   `json:"name" validate:"required,min=3,max=100"`
+	Description string   `json:"description" validate:"max=500"`
+	RoomType    string   `json:"room_type" validate:"required,oneof=group direct channel"`
+	IsPrivate   *bool    `json:"is_private" validate:"required"` // Menggunakan pointer *bool untuk membedakan antara false dan tidak diisi.
+	Members     []string `json:"members" validate:"omitempty"`   // Daftar UserID member awal (opsional)
 }
 
 func (r *CreateRoomRequest) ToModel(id string) (*models.Room, error) {
+	currentDate := time.Now()
 	strToUuid, err := uuid.FromString(id)
 
 	if err != nil {
@@ -25,6 +29,7 @@ func (r *CreateRoomRequest) ToModel(id string) (*models.Room, error) {
 		Roomtype:    r.RoomType,
 		Isprivate:   *r.IsPrivate,
 		CreatedBy:   strToUuid,
+		CreatedAt:   currentDate,
 	}, nil
 }
 

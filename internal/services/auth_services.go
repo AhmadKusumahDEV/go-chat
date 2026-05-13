@@ -241,8 +241,15 @@ func (o *OauthServicesImpl) findOrCreateGitHubUser(ctx context.Context, userInfo
 
 	user, err := o.userRepo.FindByProviderID(ctx, "github", oauthID)
 
+	var (
+		providerName string
+		avatarUrl    string
+	)
+	avatarUrl = userInfo.AvatarURL
+	providerName = "github"
+
 	if err == nil {
-		user.AvatarUrl = userInfo.AvatarURL
+		user.AvatarUrl = &avatarUrl
 		if user.Username == "" {
 			user.Username = userInfo.Login
 		}
@@ -263,9 +270,9 @@ func (o *OauthServicesImpl) findOrCreateGitHubUser(ctx context.Context, userInfo
 	newUser := &models.Users{
 		Username:     userInfo.Login,
 		Email:        userInfo.Email,
-		ProviderName: "github",
-		ProviderID:   oauthID,
-		AvatarUrl:    userInfo.AvatarURL,
+		ProviderName: &providerName,
+		ProviderID:   &oauthID,
+		AvatarUrl:    &avatarUrl,
 	}
 
 	if err := o.userRepo.Create(ctx, newUser); err != nil {
@@ -431,10 +438,18 @@ func (o *OauthServicesImpl) fetchGoogleUserInfo(accessToken string) (*models.Goo
 
 // findOrCreateGoogleUser looks up a user by provider_id=google, or creates one.
 func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo *models.GoogleUserInfo) (*models.Users, error) {
+	oauthID := fmt.Sprintf("%s", userInfo.ID)
 	user, err := o.userRepo.FindByProviderID(ctx, "google", userInfo.ID)
 
+	var (
+		providerName string
+		avatarUrl    string
+	)
+	avatarUrl = userInfo.AvatarURL
+	providerName = "google"
+
 	if err == nil {
-		user.AvatarUrl = userInfo.AvatarURL
+		user.AvatarUrl = &avatarUrl
 		if user.Username == "" {
 			user.Username = userInfo.Name
 		}
@@ -455,9 +470,9 @@ func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo
 	newUser := &models.Users{
 		Username:     userInfo.Name,
 		Email:        userInfo.Email,
-		ProviderName: "google",
-		ProviderID:   userInfo.ID,
-		AvatarUrl:    userInfo.AvatarURL,
+		ProviderName: &providerName,
+		ProviderID:   &oauthID,
+		AvatarUrl:    &avatarUrl,
 	}
 
 	if err := o.userRepo.Create(ctx, newUser); err != nil {

@@ -2,14 +2,24 @@ package response
 
 import "time"
 
-// RoomResponse adalah representasi standar room saat dikirim ke client.
+// RoomResponse untuk response list rooms dengan last message
 type RoomResponse struct {
+	ID          string               `json:"id"`
+	Name        string               `json:"name"`
+	Description string               `json:"description,omitempty"`
+	RoomType    string               `json:"room_type"`
+	IsPrivate   bool                 `json:"is_private"`
+	CreatedAt   time.Time            `json:"created_at"`
+	LastMessage *LastMessageResponse `json:"last_message,omitempty"` // ✅ Tambahkan last message
+}
+
+// LastMessageResponse untuk detail message terakhir di room
+type LastMessageResponse struct {
 	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"` // omitempty jika ingin menyembunyikan field kosong
-	RoomType    string    `json:"room_type"`
-	IsPrivate   bool      `json:"is_private"`
-	CreatedAt   time.Time `json:"created_at"`
+	Content     string    `json:"content"`
+	UserID      *string   `json:"user_id,omitempty"` // Nullable karena ON DELETE SET NULL
+	MessageType string    `json:"message_type"`
+	Timestamp   time.Time `json:"timestamp"`
 }
 
 // RoomDetailResponse bisa digunakan jika ingin menampilkan data lebih detail,

@@ -14,6 +14,7 @@ func JwtAuthMiddleware(secretKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var tokenString string
 		authHeader := c.GetHeader("Authorization")
+		tokenString = authHeader
 
 		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
 			tokenString = strings.TrimPrefix(authHeader, "Bearer ")

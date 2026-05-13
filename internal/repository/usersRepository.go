@@ -58,8 +58,6 @@ func (r *RepositoryUserImpl) FindByProviderID(ctx context.Context, providerName 
 	return &user, nil
 }
 
-
-
 func NewUserRepository(db *sql.DB) RepositoryUser {
 	return &RepositoryUserImpl{
 		RepositoryBased: NewBaseRepository[*models.Users](db).(*BaseRepository[*models.Users]),

@@ -20,3 +20,9 @@ type UpdateProfileRequest struct {
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
+
+type FcmRequest struct {
+	Platform     string `json:"platform" binding:"required"`
+	FcmToken     string `json:"fcm_token" binding:"required"`
+	Installation string `json:"installation_id" binding:"required"`
+}

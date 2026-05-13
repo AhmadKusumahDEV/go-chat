@@ -16,11 +16,13 @@ type JwtConfig struct {
 type Cfg struct {
 	AppEnv      string         `mapstructure:"APP_ENV"`
 	DatabaseURL string         `mapstructure:"DATABASE_URL"`
+	Secret      string         `mapstructure:"secret_key"`
 	RabbitMQ    RabbitMQConfig `mapstructure:"rabbitmq"`
 	Redis       RedisConfig    `mapstructure:"redis"`
 	Server      ServerConfig   `mapstructure:"server"`
 	Jwt         JwtConfig      `mapstructure:"jwt"`
 	OAuth       OAuthConfig    `mapstructure:"oauth"`
+	Firebase    FirebaseConfig `mapstructure:"firebase"`
 }
 
 func LoadConfig() (config Cfg, err error) {

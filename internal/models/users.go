@@ -13,9 +13,9 @@ type Users struct {
 	Password     string    `json:"-" db:"password_hash"`
 	Username     string    `json:"username" db:"username"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at,auto"`
-	AvatarUrl    string    `json:"avatar_url" db:"avatar_url"`
-	ProviderName string    `json:"provider_name" db:"provider_name"`
-	ProviderID   string    `json:"provider_id" db:"provider_id"`
+	AvatarUrl    *string   `json:"avatar_url" db:"avatar_url"`
+	ProviderName *string   `json:"provider_name" db:"provider_name"`
+	ProviderID   *string   `json:"provider_id" db:"provider_id"`
 }
 
 func (u *Users) GetID() interface{}   { return u.ID }

@@ -15,6 +15,7 @@ type Room struct {
 	Isprivate   bool      `db:"is_private"`
 	CreatedAt   time.Time `db:"created_at,auto"`
 	CreatedBy   uuid.UUID `db:"created_by"`
+	LastMessage *Message  `db:"-"`
 }
 
 func (u *Room) GetID() any        { return u.ID }

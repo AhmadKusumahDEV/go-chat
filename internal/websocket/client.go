@@ -80,6 +80,8 @@ func (c *Client) WritePump() {
 	for {
 		select {
 		case message, ok := <-c.Send:
+			log.Println(message)
+			log.Println(ok)
 			err := c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err != nil {
 				log.Println(err)

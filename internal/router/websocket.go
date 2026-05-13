@@ -17,6 +17,9 @@ func (r *WebsocketRouter) RegisterRoutes(router *gin.Engine, srv *config.Server)
 	ws.Use(middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess))
 	{
 		ws.GET("", r.handler.HandleConnection)
+		ws.POST("/notifiactions", r.handler.BroadcastToAll)
+		ws.POST("/notifiaction", r.handler.SendToUser)
+
 	}
 }
 

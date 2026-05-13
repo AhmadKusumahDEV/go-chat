@@ -4,15 +4,15 @@ import (
 	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
-	"github.com/google/uuid"
 )
 
 // UserResponse adalah data user yang aman untuk ditampilkan
 type UserResponse struct {
-	ID        uuid.UUID `json:"id"`
+	ID        string    `json:"id"`
 	Username  string    `json:"username"`
 	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"created_at"`
+	AvatarUrl *string    `json:"avatar_url"`
 }
 
 // LoginResponse menyertakan Token (JWT)

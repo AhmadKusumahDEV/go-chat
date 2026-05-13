@@ -47,8 +47,6 @@ func (s *MessageServicesImpl) GetRoomMessages(ctx context.Context, roomID string
 	return response.NewMessageResponses(messages), nil
 }
 
-// SendMessage creates a new message in a room.
-// Only members of the room can send messages.
 func (s *MessageServicesImpl) SendMessage(ctx context.Context, req *request.CreateMessageRequest, senderID string) (*response.MessageResponse, error) {
 	// Verify membership
 	_, err := s.memberRepo.FindMember(ctx, req.RoomID, senderID)

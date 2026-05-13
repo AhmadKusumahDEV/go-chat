@@ -6,24 +6,23 @@ import (
 	"encoding/json"
 	"log"
 
-	"myapp/internal/queue"
-	"myapp/internal/repository"
-
 	"firebase.google.com/go/v4/messaging"
+	"github.com/AhmadKusumahDEV/go-chat/internal/queue"
+	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
 	"github.com/rabbitmq/amqp091-go"
 )
 
 type NotificationWorker struct {
 	rabbitmq    *amqp091.Channel
 	fcmClient   *messaging.Client
-	userRepo    repository.UserRepository
+	userRepo    repository.RepositoryUser
 	messageRepo repository.MessageRepository
 }
 
 func NewNotificationWorker(
 	rabbitmq *amqp091.Channel,
 	fcmClient *messaging.Client,
-	userRepo repository.UserRepository,
+	userRepo repository.RepositoryUser,
 	messageRepo repository.MessageRepository,
 ) *NotificationWorker {
 	return &NotificationWorker{

@@ -122,8 +122,21 @@ func MemberResponses(member []*models.MemberComposite) []*response.MemberRespons
 	}
 	return members
 }
+func RoomResponses(rooms []*models.Room) []*response.RoomResponse {
+	if rooms == nil {
+		return []*response.RoomResponse{}
+	}
+
+	result := make([]*response.RoomResponse, 0, len(rooms))
+	for _, r := range rooms {
+		result = append(result, RoomResponse(r))
+	}
+	return result
+}
+
+// RoomResponse converts single Room model to RoomResponse DTO
 func RoomResponse(room *models.Room) *response.RoomResponse {
-	return &response.RoomResponse{
+	resp := &response.RoomResponse{
 		ID:          room.ID.String(),
 		Name:        room.Name,
 		Description: room.Description,
@@ -131,14 +144,42 @@ func RoomResponse(room *models.Room) *response.RoomResponse {
 		IsPrivate:   room.Isprivate,
 		CreatedAt:   room.CreatedAt,
 	}
+
+	// ✅ Convert last message jika ada
+	if room.LastMessage != nil {
+		var userID *string
+		if room.LastMessage.SenderID != nil {
+			uid := room.LastMessage.SenderID.String()
+			userID = &uid
+		}
+
+		resp.LastMessage = &response.LastMessageResponse{
+			ID:          room.LastMessage.ID.String(),
+			Content:     room.LastMessage.Content,
+			UserID:      userID,
+			MessageType: room.LastMessage.Type,
+			Timestamp:   room.LastMessage.Timestamp,
+		}
+	}
+
+	return resp
 }
 
-func RoomResponses(room []*models.Room) []*response.RoomResponse {
-	var rooms []*response.RoomResponse
-	for _, r := range room {
-		rooms = append(rooms, RoomResponse(r))
+func UserResponses(user []*models.Users) []*response.UserResponse {
+	var rooms []*response.UserResponse
+	for _, r := range user {
+		rooms = append(rooms, UserResponse(r))
 	}
 	return rooms
+}
+func UserResponse(user *models.Users) *response.UserResponse {
+	return &response.UserResponse{
+		ID:        user.ID.String(),
+		Username:  user.Username,
+		Email:     user.Email,
+		CreatedAt: user.CreatedAt,
+		AvatarUrl: user.AvatarUrl,
+	}
 }
 
 func BuildErrorRedirectURL(errorCode, errorMessage string) string {

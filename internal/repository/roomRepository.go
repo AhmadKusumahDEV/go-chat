@@ -3,10 +3,12 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
 	"github.com/gofrs/uuid"
+	"github.com/pkg/errors"
 )
 
 type RepositoryRoom interface {
@@ -15,7 +17,7 @@ type RepositoryRoom interface {
 	FindRoomByName(ctx context.Context, roomName string) ([]*models.Room, error)
 	FindAllRoomByUserID(ctx context.Context, userID string) ([]*models.Room, error)
 	FindMemberRoom(ctx context.Context, roomID string) ([]*models.MemberComposite, error)
-	CreateWithMember(ctx context.Context, room *models.Room, member *models.Members) error
+	CreateWithMember(ctx context.Context, room *models.Room, members []*models.Members) error
 }
 
 type RepositoryRoomImpl struct {
@@ -24,41 +26,53 @@ type RepositoryRoomImpl struct {
 }
 
 // CreateWithMember implements RepositoryRoom with a Database Transaction (ACID)
-func (p *RepositoryRoomImpl) CreateWithMember(ctx context.Context, room *models.Room, member *models.Members) error {
+func (p *RepositoryRoomImpl) CreateWithMember(ctx context.Context, room *models.Room, members []*models.Members) error {
 	v6, err := uuid.NewV6()
 	if err != nil {
 		return err
 	}
 	room.ID = v6
-	member.Roomid = v6
 
 	if err := room.Validate(); err != nil {
 		return err
 	}
-	if err := member.Validate(); err != nil {
-		return err
+	for _, member := range members {
+		member.Roomid = v6
+		if err := member.Validate(); err != nil {
+			return err
+		}
 	}
 
 	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback() // Will do nothing if tx.Commit() succeeds
+	defer tx.Rollback()
 
-	// 1. Insert Room
-	roomQuery := `INSERT INTO rooms (id, name, room_type, description, is_private, created_by) 
+	roomQuery := `INSERT INTO rooms (id, room_name, room_type, description, is_private, created_by) 
 					VALUES ($1, $2, $3, $4, $5, $6)`
 	_, err = tx.ExecContext(ctx, roomQuery, room.ID, room.Name, room.Roomtype, room.Description, room.Isprivate, room.CreatedBy)
 	if err != nil {
 		return err
 	}
 
-	// 2. Insert Member
 	memberQuery := `INSERT INTO room_members (room_id, user_id, added_by, role) 
 					VALUES ($1, $2, $3, $4)`
-	_, err = tx.ExecContext(ctx, memberQuery, member.Roomid, member.Userid, member.AddedBy, member.Role)
+	for _, member := range members {
+		_, err = tx.ExecContext(ctx, memberQuery, member.Roomid, member.Userid, member.AddedBy, member.Role)
+		if err != nil {
+			return err
+		}
+	}
+
+	content := fmt.Sprintf("Room created at %s", room.CreatedAt.Format("2006-01-02"))
+
+	systemMessageQuery := `INSERT INTO messages (room_id, user_id, content, message_type, timestamp) 
+							VALUES ($1, $2, $3, $4, $5)`
+
+	_, err = tx.ExecContext(ctx, systemMessageQuery, room.ID, room.CreatedBy, content, "system", room.CreatedAt)
 	if err != nil {
-		return err
+		return errors.New("failed insert system message")
 	}
 
 	return tx.Commit()
@@ -145,8 +159,32 @@ func (p *RepositoryRoomImpl) FindRoomByName(ctx context.Context, roomName string
 
 // FindAllRoomByUserID implements RepositoryRoom.
 func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID string) ([]*models.Room, error) {
-	query := `SELECT rs.id, rs.room_name, rs.description, rs.room_type, rs.is_private, rs.created_by 
-			  FROM rooms rs JOIN room_members rms ON rs.id = rms.room_id WHERE rms.user_id = $1`
+	query := `
+        SELECT 
+            r.id, 
+            r.room_name, 
+            r.description, 
+            r.room_type, 
+            r.is_private, 
+            r.created_by,
+            r.created_at,
+            m.id AS last_message_id,
+            m.content AS last_message_content,
+            m.user_id AS last_message_user_id,
+            m.message_type AS last_message_type,
+            m.timestamp AS last_message_timestamp
+        FROM rooms r
+        JOIN room_members rm ON r.id = rm.room_id
+        LEFT JOIN LATERAL (
+            SELECT id, content, user_id, message_type, timestamp
+            FROM messages
+            WHERE room_id = r.id
+            ORDER BY timestamp DESC
+            LIMIT 1
+        ) m ON true
+        WHERE rm.user_id = $1
+        ORDER BY m.timestamp DESC NULLS LAST
+    `
 
 	rows, err := p.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -154,9 +192,16 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 	}
 	defer rows.Close()
 
-	var rooms []*models.Room
+	rooms := make([]*models.Room, 0)
+
 	for rows.Next() {
 		var room models.Room
+		var lastMsgID sql.NullString
+		var lastMsgContent sql.NullString
+		var lastMsgUserID sql.NullString
+		var lastMsgType sql.NullString
+		var lastMsgTimestamp sql.NullTime
+
 		if err := rows.Scan(
 			&room.ID,
 			&room.Name,
@@ -164,10 +209,39 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 			&room.Roomtype,
 			&room.Isprivate,
 			&room.CreatedBy,
+			&room.CreatedAt,
+			&lastMsgID,
+			&lastMsgContent,
+			&lastMsgUserID,
+			&lastMsgType,
+			&lastMsgTimestamp,
 		); err != nil {
 			return nil, err
 		}
+
+		// ✅ Set last message jika ada
+		if lastMsgID.Valid {
+			var userID *uuid.UUID
+			if lastMsgUserID.Valid {
+				uid, _ := uuid.FromString(lastMsgUserID.String)
+				userID = &uid
+			}
+
+			msgID, _ := uuid.FromString(lastMsgID.String)
+			room.LastMessage = &models.Message{
+				ID:        msgID,
+				Content:   lastMsgContent.String,
+				SenderID:  userID,
+				Type:      lastMsgType.String,
+				Timestamp: lastMsgTimestamp.Time,
+			}
+		}
+
 		rooms = append(rooms, &room)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return rooms, nil
