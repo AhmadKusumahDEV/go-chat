@@ -17,6 +17,7 @@ type HandlerRoom interface {
 	HandleGetRoomByUserID(c *gin.Context)
 	HandleGetRoomByName(c *gin.Context)
 	HandleCreateRoom(c *gin.Context)
+	HandleGetRoomDetail(c *gin.Context)
 	HandlerUpdatedRoom(c *gin.Context)
 	HandlerDeleteRoom(c *gin.Context)
 }
@@ -201,4 +202,39 @@ func (r *HandlerRoomImpl) HandleGetRoomByUserID(c *gin.Context) {
 
 func NewRoomHandler(srv services.RoomService) HandlerRoom {
 	return &HandlerRoomImpl{srv: srv}
+}
+
+// HandleGetRoomDetail implements HandlerRoom - returns full room details with members list
+func (r *HandlerRoomImpl) HandleGetRoomDetail(c *gin.Context) {
+	roomID := c.Param("id")
+
+	// Validate room ID format
+	if _, err := uuid.FromString(roomID); err != nil {
+		c.AbortWithError(http.StatusBadRequest, errors.New("invalid room ID format"))
+		return
+	}
+
+	// Get user ID from JWT middleware
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.AbortWithError(http.StatusUnauthorized, errors.New("unauthorized: user_id not found"))
+		return
+	}
+
+	// Get room detail
+	roomDetail, err := r.srv.GetRoomDetail(c.Request.Context(), roomID, userID.(string))
+	if err != nil {
+		if err.Error() == "forbidden: you are not a member of this room" {
+			c.AbortWithError(http.StatusForbidden, err)
+			return
+		}
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Data:    roomDetail,
+		Message: "success get room detail",
+	})
 }

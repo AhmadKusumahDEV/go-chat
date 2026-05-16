@@ -13,46 +13,61 @@ import (
 )
 
 func main() {
-	log.Println("🔄 Starting workers...")
+	log.Println("═══════════════════════════════════════════════════════════════")
+	log.Println("🚀 Starting Go-Chat Workers")
+	log.Println("═══════════════════════════════════════════════════════════════")
 
 	// 1. Load config
+	log.Println("📋 Loading configuration...")
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Fatalf("❌ Failed to load config: %v", err)
 	}
+	log.Printf("✅ Config loaded | Environment: %s", cfg.AppEnv)
 
 	// 2. Setup database
+	log.Println("🔌 Connecting to PostgreSQL...")
 	db, err := config.NewDB(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("❌ Failed to connect to database: %v", err)
 	}
+	log.Println("✅ PostgreSQL connected")
 	defer db.Close()
 
 	// 3. Setup RabbitMQ (using config wrapper with auto-reconnect)
+	log.Println("🐰 Connecting to RabbitMQ...")
 	rmq, err := config.NewRabbitMQ(&cfg.RabbitMQ)
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+		log.Fatalf("❌ Failed to connect to RabbitMQ: %v", err)
 	}
+	log.Println("✅ RabbitMQ connected")
 	defer rmq.Close()
 
 	// Worker needs its own dedicated channel
+	log.Println("📡 Creating RabbitMQ worker channel...")
 	workerChannel, err := rmq.CreateChannel()
 	if err != nil {
-		log.Fatalf("Failed to create worker channel: %v", err)
+		log.Fatalf("❌ Failed to create worker channel: %v", err)
 	}
+	log.Println("✅ Worker channel created")
 	defer workerChannel.Close()
 
 	// 4. Setup Firebase FCM
 	firebaseCredentialPath := "chat-appliaction-19fd5-firebase-adminsdk-fbsvc-51d924664f.json"
+	log.Printf("📱 Firebase credential path: %s", firebaseCredentialPath)
+	log.Printf("📱 Firebase project: chat-appliaction-19fd5")
+
 	app, err := config.InitFirebase(context.Background(), "chat-appliaction-19fd5", firebaseCredentialPath)
 	if err != nil {
-		log.Fatalf("Failed to initialize Firebase: %v", err)
+		log.Fatalf("❌ Failed to initialize Firebase: %v", err)
 	}
+	log.Println("✅ Firebase initialized successfully")
 
 	fcmClient, err := app.Messaging(context.Background())
 	if err != nil {
-		log.Fatalf("Failed to get FCM client: %v", err)
+		log.Fatalf("❌ Failed to get FCM client: %v", err)
 	}
+	log.Println("✅ FCM client ready")
 
 	// 5. Setup repositories
 	userRepo := repository.NewUserRepository(db)
@@ -68,18 +83,26 @@ func main() {
 
 	// 7. Start workers
 	if err := notificationWorker.Start(ctx); err != nil {
-		log.Fatalf("Failed to start notification worker: %v", err)
+		log.Fatalf("❌ Failed to start notification worker: %v", err)
 	}
 
-	log.Println("✅ All workers started")
+	log.Println("═══════════════════════════════════════════════════════════════")
+	log.Println("✅ All workers started successfully!")
+	log.Println("═══════════════════════════════════════════════════════════════")
+	log.Println("📬 Waiting for messages...")
+	log.Println("🛑 Press Ctrl+C to shutdown")
+	log.Println("═══════════════════════════════════════════════════════════════")
 
 	// 8. Wait for shutdown signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
+	log.Println("═══════════════════════════════════════════════════════════════")
 	log.Println("🛑 Shutting down workers...")
+	log.Println("═══════════════════════════════════════════════════════════════")
 	cancel() // Stop all workers
 
-	log.Println("✅ Workers exited")
+	log.Println("✅ Workers exited gracefully")
+	log.Println("═══════════════════════════════════════════════════════════════")
 }

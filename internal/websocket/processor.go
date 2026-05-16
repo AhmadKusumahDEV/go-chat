@@ -97,6 +97,7 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 		msg.Client.SendMessage(errorRes)
 		return
 	}
+	log.Println("log brodcast msg: ", broadcastMsg)
 
 	err = mp.validateMessage(&broadcastMsg)
 	if err != nil {
@@ -114,6 +115,7 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 			log.Println("Invalid message payload", err)
 			return
 		}
+		log.Println("log create msg: ", createMsgReq)
 
 		// 2. Save to Database synchronously
 		ctx := context.Background()

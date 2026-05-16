@@ -21,12 +21,22 @@ type RepositoryUserImpl struct {
 
 // FindByEmail implements RepositoryUser.
 func (r *RepositoryUserImpl) FindByEmail(ctx context.Context, email string) (models.Users, error) {
-	query := "SELECT id , username, password_hash from users WHERE email = $1"
+	query := `SELECT id, username, email, password_hash, created_at, avatar_url, provider_name, provider_id
+			  FROM users WHERE email = $1`
 	var users models.Users
 
 	result := r.db.QueryRowContext(ctx, query, email)
 
-	err := result.Scan(&users.ID, &users.Username, &users.Password)
+	err := result.Scan(
+		&users.ID,
+		&users.Username,
+		&users.Email,
+		&users.Password,
+		&users.CreatedAt,
+		&users.AvatarUrl,
+		&users.ProviderName,
+		&users.ProviderID,
+	)
 	if err != nil {
 		return models.Users{}, err
 	}

@@ -23,6 +23,7 @@ type RoomService interface {
 	DeleteRoom(ctx context.Context, roomID string, deletedBy string) error
 	GetRoomByUserID(ctx context.Context, userID string) ([]*response.RoomResponse, error)
 	GetRoomByName(ctx context.Context, room_name request.GetRoomByName) ([]*response.RoomResponse, error)
+	GetRoomDetail(ctx context.Context, roomID string, userID string) (*response.RoomDetailResponse, error)
 }
 
 type RoomServiceImpl struct {
@@ -217,4 +218,52 @@ func NewRoomServices(roomRepository repository.RepositoryRoom, memberRepository 
 		cahce:            cahce,
 		validate:         validate,
 	}
+}
+
+// GetRoomDetail implements RoomService - returns full room details with members list
+func (r *RoomServiceImpl) GetRoomDetail(ctx context.Context, roomID string, userID string) (*response.RoomDetailResponse, error) {
+	// 1. Validate user is member of the room
+	_, err := r.memberRepository.FindMember(ctx, roomID, userID)
+	if err != nil {
+		return nil, errors.New("forbidden: you are not a member of this room")
+	}
+
+	// 2. Get room details (includes member count)
+	roomDetail, err := r.roomRepository.FindRoomDetail(ctx, roomID)
+	if err != nil {
+		log.Printf("error on services layer GetRoomDetail: %v", err)
+		return nil, err
+	}
+
+	// 3. Get all members with user details
+	members, err := r.roomRepository.FindRoomMembers(ctx, roomID)
+	if err != nil {
+		log.Printf("error on services layer GetRoomDetail (members): %v", err)
+		return nil, err
+	}
+
+	// 4. Build response
+	memberResponses := make([]response.MemberDetailResponse, 0, len(members))
+	for _, m := range members {
+		memberResponses = append(memberResponses, response.MemberDetailResponse{
+			UserID:    m.UserID.String(),
+			Username:  m.Username,
+			Email:     m.Email,
+			AvatarUrl: m.AvatarUrl,
+			Role:      m.Role,
+			JoinedAt:  m.JoinedAt,
+		})
+	}
+
+	return &response.RoomDetailResponse{
+		ID:          roomDetail.ID.String(),
+		Name:        roomDetail.Name,
+		Description: roomDetail.Description,
+		RoomType:    roomDetail.RoomType,
+		IsPrivate:   roomDetail.IsPrivate,
+		CreatedAt:   roomDetail.CreatedAt,
+		CreatedBy:   roomDetail.CreatedBy.String(),
+		MemberCount: roomDetail.MemberCount,
+		Members:     memberResponses,
+	}, nil
 }

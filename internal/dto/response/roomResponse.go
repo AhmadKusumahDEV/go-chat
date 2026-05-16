@@ -10,22 +10,37 @@ type RoomResponse struct {
 	RoomType    string               `json:"room_type"`
 	IsPrivate   bool                 `json:"is_private"`
 	CreatedAt   time.Time            `json:"created_at"`
-	LastMessage *LastMessageResponse `json:"last_message,omitempty"` // ✅ Tambahkan last message
+	LastMessage *LastMessageResponse `json:"last_message,omitempty"`
 }
 
 // LastMessageResponse untuk detail message terakhir di room
 type LastMessageResponse struct {
 	ID          string    `json:"id"`
 	Content     string    `json:"content"`
-	UserID      *string   `json:"user_id,omitempty"` // Nullable karena ON DELETE SET NULL
+	UserID      *string   `json:"user_id,omitempty"`
 	MessageType string    `json:"message_type"`
 	Timestamp   time.Time `json:"timestamp"`
 }
 
-// RoomDetailResponse bisa digunakan jika ingin menampilkan data lebih detail,
-// misalnya termasuk daftar member (walaupun sebaiknya di-fetch terpisah jika datanya banyak).
+// RoomDetailResponse untuk menampilkan informasi lengkap sebuah room
 type RoomDetailResponse struct {
-	RoomResponse
-	MemberCount int `json:"member_count"`
-	// Members []MemberResponse `json:"members,omitempty"` // Hati-hati, bisa sangat besar untuk grup besar.
+	ID          string              `json:"id"`
+	Name        string              `json:"name"`
+	Description string              `json:"description,omitempty"`
+	RoomType    string              `json:"room_type"`
+	IsPrivate   bool                `json:"is_private"`
+	CreatedAt   time.Time           `json:"created_at"`
+	CreatedBy   string              `json:"created_by"`
+	MemberCount int                 `json:"member_count"`
+	Members     []MemberDetailResponse `json:"members"`
+}
+
+// MemberDetailResponse untuk menampilkan detail member dalam room
+type MemberDetailResponse struct {
+	UserID    string  `json:"user_id"`
+	Username  string  `json:"username"`
+	Email     string  `json:"email"`
+	AvatarUrl *string `json:"avatar_url,omitempty"`
+	Role      string  `json:"role"`
+	JoinedAt  time.Time `json:"joined_at"`
 }

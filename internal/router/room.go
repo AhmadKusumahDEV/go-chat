@@ -19,6 +19,7 @@ func (r *RoomRoutes) RegisterRoutes(router *gin.Engine, srv *config.Server) {
 	// roomgroup.GET("/", r.handle.HandleGetAllRoom)
 	roomgroup.GET("/", r.handle.HandleGetRoomByUserID)
 	roomgroup.GET("/search", r.handle.HandleGetRoomByName)
+	roomgroup.GET("/:id", r.handle.HandleGetRoomDetail)
 
 	roomgroup.POST("/", r.handle.HandleCreateRoom)
 

@@ -115,6 +115,19 @@ func (u *UsersServivesImpl) RefreshUser(ctx context.Context, req *request.Refres
 
 // RegisterUser implements UsersServices.
 func (u *UsersServivesImpl) RegisterUser(ctx context.Context, req *request.RegisterRequest) error {
+	// 1. Check if email already exists (might be registered via OAuth)
+	existingUser, err := u.userRepository.FindByEmail(ctx, req.Email)
+	if err == nil {
+		// Email exists! Check if user has OAuth provider linked
+		if existingUser.ProviderName != nil && *existingUser.ProviderName != "" {
+			return fmt.Errorf("email %s is already registered with %s. Please use %s login or use a different email.",
+				req.Email, *existingUser.ProviderName, *existingUser.ProviderName)
+		}
+		// User exists but no provider - this is a duplicate registration
+		return fmt.Errorf("email %s is already registered. Please login instead.", req.Email)
+	}
+
+	// 2. Hash password and create user
 	password := helpers.HashPassword(req.Password)
 
 	dtoToModels := models.Users{
@@ -123,8 +136,7 @@ func (u *UsersServivesImpl) RegisterUser(ctx context.Context, req *request.Regis
 		Password: password,
 	}
 
-	err := u.userRepository.Create(ctx, &dtoToModels)
-
+	err = u.userRepository.Create(ctx, &dtoToModels)
 	if err != nil {
 		return errors.New("failed to create user")
 	}

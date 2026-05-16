@@ -26,7 +26,7 @@ type NotificationEvent struct {
 	SenderID  string   `json:"senderId"`
 	Title     string   `json:"title"`
 	Body      string   `json:"body"`
-	UserIDs   []string `json:"userIds"` // Optional: If pre-calculated
+	UserIDs   []string `json:"userIds"`
 }
 
 // Implementation

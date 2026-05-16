@@ -17,6 +17,8 @@ type RepositoryRoom interface {
 	FindRoomByName(ctx context.Context, roomName string) ([]*models.Room, error)
 	FindAllRoomByUserID(ctx context.Context, userID string) ([]*models.Room, error)
 	FindMemberRoom(ctx context.Context, roomID string) ([]*models.MemberComposite, error)
+	FindRoomDetail(ctx context.Context, roomID string) (*models.RoomDetail, error)
+	FindRoomMembers(ctx context.Context, roomID string) ([]models.MemberDetail, error)
 	CreateWithMember(ctx context.Context, room *models.Room, members []*models.Members) error
 }
 
@@ -87,8 +89,8 @@ func (p *RepositoryRoomImpl) FindMemberRoom(ctx context.Context, roomID string) 
 		where room_id = $1
 		)
 
-		SELECT u.username , rf.role 
-		from room_filter rf 
+		SELECT u.username , rf.role
+		from room_filter rf
 		join users u ON rf.user_id = u.id
 	`
 
@@ -113,6 +115,87 @@ func (p *RepositoryRoomImpl) FindMemberRoom(ctx context.Context, roomID string) 
 	}
 
 	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return members, nil
+}
+
+// FindRoomDetail implements RepositoryRoom - returns full room details with member count
+func (p *RepositoryRoomImpl) FindRoomDetail(ctx context.Context, roomID string) (*models.RoomDetail, error) {
+	query := `
+		SELECT
+			r.id,
+			r.room_name,
+			r.description,
+			r.room_type,
+			r.is_private,
+			r.created_at,
+			r.created_by,
+			COUNT(rm.user_id)::int AS member_count
+		FROM rooms r
+		LEFT JOIN room_members rm ON r.id = rm.room_id
+		WHERE r.id = $1
+		GROUP BY r.id
+	`
+
+	var room models.RoomDetail
+	err := p.db.QueryRowContext(ctx, query, roomID).Scan(
+		&room.ID,
+		&room.Name,
+		&room.Description,
+		&room.RoomType,
+		&room.IsPrivate,
+		&room.CreatedAt,
+		&room.CreatedBy,
+		&room.MemberCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &room, nil
+}
+
+// FindRoomMembers implements RepositoryRoom - returns all members with user details
+func (p *RepositoryRoomImpl) FindRoomMembers(ctx context.Context, roomID string) ([]models.MemberDetail, error) {
+	query := `
+		SELECT
+			u.id,
+			u.username,
+			u.email,
+			u.avatar_url,
+			rm.role,
+			rm.joined_at
+		FROM room_members rm
+		JOIN users u ON rm.user_id = u.id
+		WHERE rm.room_id = $1
+		ORDER BY rm.joined_at ASC
+	`
+
+	rows, err := p.db.QueryContext(ctx, query, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var members []models.MemberDetail
+	for rows.Next() {
+		var member models.MemberDetail
+		if err := rows.Scan(
+			&member.UserID,
+			&member.Username,
+			&member.Email,
+			&member.AvatarUrl,
+			&member.Role,
+			&member.JoinedAt,
+		); err != nil {
+			return nil, err
+		}
+		members = append(members, member)
+	}
+
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 

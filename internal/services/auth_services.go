@@ -236,20 +236,16 @@ func (o *OauthServicesImpl) fetchGitHubEmail(accessToken string) (string, error)
 	return "", errors.New("no primary email found")
 }
 
+// findOrCreateGitHubUser looks up a user by provider_id=github, or by email (if already registered),
+// or creates one. Returns error if email exists with different provider.
 func (o *OauthServicesImpl) findOrCreateGitHubUser(ctx context.Context, userInfo *models.GithubUserInfo) (*models.Users, error) {
 	oauthID := fmt.Sprintf("%d", userInfo.ID)
 
+	// 1. First try to find by provider_id
 	user, err := o.userRepo.FindByProviderID(ctx, "github", oauthID)
-
-	var (
-		providerName string
-		avatarUrl    string
-	)
-	avatarUrl = userInfo.AvatarURL
-	providerName = "github"
-
 	if err == nil {
-		user.AvatarUrl = &avatarUrl
+		// User found by provider_id, update profile
+		user.AvatarUrl = &userInfo.AvatarURL
 		if user.Username == "" {
 			user.Username = userInfo.Login
 		}
@@ -262,17 +258,45 @@ func (o *OauthServicesImpl) findOrCreateGitHubUser(ctx context.Context, userInfo
 		return user, nil
 	}
 
+	// If error is NOT "not found", return it
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 
-	// Create new user
+	// 2. Check if email already exists (user may have registered with email/password)
+	existingUser, errEmail := o.userRepo.FindByEmail(ctx, userInfo.Email)
+	if errEmail == nil {
+		// Email exists! Check if user already has a provider linked
+		if existingUser.ProviderName != nil && *existingUser.ProviderName != "" {
+			// User already has a different provider linked
+			return nil, fmt.Errorf("email %s is already registered with %s. Please login with %s instead.",
+				userInfo.Email, *existingUser.ProviderName, *existingUser.ProviderName)
+		}
+
+		// User registered with email/password, link this OAuth provider
+		providerName := "github"
+		existingUser.ProviderName = &providerName
+		existingUser.ProviderID = &oauthID
+		existingUser.AvatarUrl = &userInfo.AvatarURL
+		if existingUser.Username == "" {
+			existingUser.Username = userInfo.Login
+		}
+
+		errUpdate := o.userRepo.Update(ctx, &existingUser)
+		if errUpdate != nil {
+			return nil, errUpdate
+		}
+
+		return &existingUser, nil
+	}
+
+	// 3. Email not found - create new user
 	newUser := &models.Users{
 		Username:     userInfo.Login,
 		Email:        userInfo.Email,
-		ProviderName: &providerName,
+		ProviderName: strPtr("github"),
 		ProviderID:   &oauthID,
-		AvatarUrl:    &avatarUrl,
+		AvatarUrl:    &userInfo.AvatarURL,
 	}
 
 	if err := o.userRepo.Create(ctx, newUser); err != nil {
@@ -436,20 +460,16 @@ func (o *OauthServicesImpl) fetchGoogleUserInfo(accessToken string) (*models.Goo
 	return &userInfo, nil
 }
 
-// findOrCreateGoogleUser looks up a user by provider_id=google, or creates one.
+// findOrCreateGoogleUser looks up a user by provider_id=google, or by email, or creates one.
+// Returns error if email exists with different provider.
 func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo *models.GoogleUserInfo) (*models.Users, error) {
-	oauthID := fmt.Sprintf("%s", userInfo.ID)
-	user, err := o.userRepo.FindByProviderID(ctx, "google", userInfo.ID)
+	oauthID := userInfo.ID
 
-	var (
-		providerName string
-		avatarUrl    string
-	)
-	avatarUrl = userInfo.AvatarURL
-	providerName = "google"
-
+	// 1. First try to find by provider_id
+	user, err := o.userRepo.FindByProviderID(ctx, "google", oauthID)
 	if err == nil {
-		user.AvatarUrl = &avatarUrl
+		// User found by provider_id, update profile
+		user.AvatarUrl = &userInfo.AvatarURL
 		if user.Username == "" {
 			user.Username = userInfo.Name
 		}
@@ -462,24 +482,52 @@ func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo
 		return user, nil
 	}
 
+	// If error is NOT "not found", return it
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 
-	// Create new user
+	// 2. Check if email already exists (user may have registered with email/password)
+	existingUser, errEmail := o.userRepo.FindByEmail(ctx, userInfo.Email)
+	if errEmail == nil {
+		// Email exists! Check if user already has a provider linked
+		if existingUser.ProviderName != nil && *existingUser.ProviderName != "" {
+			// User already has a different provider linked
+			return nil, fmt.Errorf("email %s is already registered with %s. Please login with %s instead.",
+				userInfo.Email, *existingUser.ProviderName, *existingUser.ProviderName)
+		}
+
+		// User registered with email/password, link this OAuth provider
+		providerName := "google"
+		existingUser.ProviderName = &providerName
+		existingUser.ProviderID = &oauthID
+		existingUser.AvatarUrl = &userInfo.AvatarURL
+		if existingUser.Username == "" {
+			existingUser.Username = userInfo.Name
+		}
+
+		errUpdate := o.userRepo.Update(ctx, &existingUser)
+		if errUpdate != nil {
+			return nil, errUpdate
+		}
+
+		return &existingUser, nil
+	}
+
+	// 3. Email not found - create new user
 	newUser := &models.Users{
 		Username:     userInfo.Name,
 		Email:        userInfo.Email,
-		ProviderName: &providerName,
+		ProviderName: strPtr("google"),
 		ProviderID:   &oauthID,
-		AvatarUrl:    &avatarUrl,
+		AvatarUrl:    &userInfo.AvatarURL,
 	}
 
 	if err := o.userRepo.Create(ctx, newUser); err != nil {
 		return nil, err
 	}
 
-	createdUser, _ := o.userRepo.FindByProviderID(ctx, "google", userInfo.ID)
+	createdUser, _ := o.userRepo.FindByProviderID(ctx, "google", oauthID)
 	if createdUser != nil {
 		return createdUser, nil
 	}
@@ -550,4 +598,9 @@ func NewOauthServices(config config.Cfg, redis cahce.CahceRedis, oauthRepo repos
 		oauthRepo: oauthRepo,
 		userRepo:  userRepo,
 	}
+}
+
+// strPtr is a helper to get pointer to string
+func strPtr(s string) *string {
+	return &s
 }
