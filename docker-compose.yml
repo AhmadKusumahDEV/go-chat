@@ -14,9 +14,9 @@ services:
       migrate:
         condition: service_completed_successfully
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     environment:
       - SERVER_PORT=8090 # harus sama pada bagian ports di atas terfokus nya pada bagian kanan 
       - GRPC_PORT=50051
