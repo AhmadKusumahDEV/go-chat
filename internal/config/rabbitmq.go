@@ -26,7 +26,7 @@ type RabbitMQ struct {
 	done    chan bool
 }
 
-// NewRabbitMQ - Create RabbitMQ connection dengan auto-reconnect
+// NewRabbitMQ - Create RabbitMQ connection dengan retry on startup + auto-reconnect
 func NewRabbitMQ(config *RabbitMQConfig) (*RabbitMQ, error) {
 	if config.MaxChannels == 0 {
 		config.MaxChannels = 100
@@ -46,9 +46,20 @@ func NewRabbitMQ(config *RabbitMQConfig) (*RabbitMQ, error) {
 		done:   make(chan bool),
 	}
 
-	// Initial connection
-	if err := rmq.connect(); err != nil {
-		return nil, err
+	// Initial connection with retry
+	maxRetries := 10
+	for i := 1; i <= maxRetries; i++ {
+		log.Printf("🔄 Connecting to RabbitMQ... (attempt %d/%d)", i, maxRetries)
+		if err := rmq.connect(); err != nil {
+			if i == maxRetries {
+				return nil, fmt.Errorf("failed to connect after %d attempts: %w", maxRetries, err)
+			}
+			log.Printf("⚠️ Connection attempt %d failed: %v, retrying in %v...", i, err, config.ReconnectDelay)
+			time.Sleep(config.ReconnectDelay)
+			continue
+		}
+		// Success - break out of retry loop
+		break
 	}
 
 	// Setup exchanges dan queues
@@ -63,7 +74,7 @@ func NewRabbitMQ(config *RabbitMQConfig) (*RabbitMQ, error) {
 }
 
 func (r *RabbitMQ) connect() error {
-	log.Println("🔄 Connecting to RabbitMQ...")
+	log.Printf("🔄 Connecting to RabbitMQ at %s...", r.config.URL)
 
 	// Create connection with custom config
 	config := amqp091.Config{
@@ -76,7 +87,7 @@ func (r *RabbitMQ) connect() error {
 
 	conn, err := amqp091.DialConfig(r.config.URL, config)
 	if err != nil {
-		return fmt.Errorf("failed to connect to RabbitMQ: %w", err)
+		return fmt.Errorf("failed to connect to RabbitMQ at %s: %w", r.config.URL, err)
 	}
 
 	// Create channel
@@ -101,7 +112,7 @@ func (r *RabbitMQ) connect() error {
 	r.conn = conn
 	r.channel = ch
 
-	log.Println("✅ Connected to RabbitMQ")
+	log.Printf("✅ Connected to RabbitMQ successfully")
 	return nil
 }
 

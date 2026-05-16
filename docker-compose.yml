@@ -64,10 +64,11 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
+    restart: unless-stopped
     networks:
       - backend-net
     healthcheck:
-      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -99,11 +100,18 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       - DATABASE_URL=postgres://main:example@postgres_db:5432/mydatabase?sslmode=disable
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     networks:
       - backend-net
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
     backend-net:
