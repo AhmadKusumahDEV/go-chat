@@ -11,13 +11,13 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/config"
 	"github.com/AhmadKusumahDEV/go-chat/internal/handlers"
 	"github.com/AhmadKusumahDEV/go-chat/internal/middelware"
+	"github.com/AhmadKusumahDEV/go-chat/internal/queue"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
 	"github.com/AhmadKusumahDEV/go-chat/internal/router"
 	"github.com/AhmadKusumahDEV/go-chat/internal/services"
 	"github.com/AhmadKusumahDEV/go-chat/internal/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/rabbitmq/amqp091-go"
 )
 
 // var upgrade websocket.Upgrader = websocket.Upgrader{
@@ -64,15 +64,12 @@ func main() {
 	log.Println(cfg.Redis)
 	log.Println(cfg.RabbitMQ)
 
-	rabbitmqURL := cfg.RabbitMQ.URL
-	if rabbitmqURL == "" {
-		rabbitmqURL = "amqp://guest:guest@localhost:5672/"
-	}
-	rabbitmqConn, err := amqp091.Dial(rabbitmqURL)
+	// RabbitMQ (using config wrapper with auto-reconnect)
+	rmq, err := config.NewRabbitMQ(&cfg.RabbitMQ)
 	if err != nil {
-		log.Println("error in rabbitmq", err)
+		log.Fatalf("failed to connect to RabbitMQ: %v", err)
 	}
-	defer rabbitmqConn.Close()
+	defer rmq.Close()
 
 	db, err := config.NewDB(cfg.DatabaseURL)
 	if err != nil {
@@ -86,15 +83,7 @@ func main() {
 
 	newClientRedis := cahce.NewClientRedis(rds)
 
-	// webscoket Manager
-	manager := websocket.NewWebSocketManager()
-	manager.Start()
-	wsHandler := handlers.NewWebsocketHandler(manager)
-	wsRouter := router.NewWebsocketRouter(wsHandler)
-
-	defer manager.Stop()
-
-	// repostiory
+	// 1. Initialize Repositories
 	roomRepository := repository.NewRoomRepository(db)
 	memberRepository := repository.NewMemberRepository(db)
 	usersRepository := repository.NewUserRepository(db)
@@ -102,12 +91,23 @@ func main() {
 	messageRepository := repository.NewMessageRepository(db)
 	firebaseRepository := repository.NewFirebaseRepository(db)
 
-	//services
+	// 2. Initialize Queue Publisher
+	publisher := queue.NewRabbitMQPublisher(rmq.GetChannel())
+
+	// 3. Initialize Services
 	roomServices := services.NewRoomServices(roomRepository, memberRepository, newClientRedis, validate)
 	usersServices := services.NewUsersServices(usersRepository, firebaseRepository, cfg.Jwt)
 	oauthServices := services.NewOauthServices(cfg, newClientRedis, oauthStatesRepository, usersRepository)
 	messageServices := services.NewMessageServices(messageRepository, memberRepository)
 	memberServices := services.NewMemberServices(roomRepository, memberRepository, newClientRedis, validate)
+
+	// 4. Initialize WebSocket Manager
+	manager := websocket.NewWebSocketManager(messageServices, publisher)
+	manager.Start()
+	wsHandler := handlers.NewWebsocketHandler(manager)
+	wsRouter := router.NewWebsocketRouter(wsHandler)
+
+	defer manager.Stop()
 
 	//handler
 	roomHandler := handlers.NewRoomHandler(roomServices)

@@ -12,6 +12,7 @@ type RepositoryMembers interface {
 
 	FindMember(ctx context.Context, roomID string, userID string) (*models.Members, error)
 	RemoveMember(ctx context.Context, roomID string, userID string) error
+	GetRoomMemberIDs(ctx context.Context, roomID string) ([]string, error)
 }
 
 type RepositoryMemberImpl struct {
@@ -59,6 +60,31 @@ func (r *RepositoryMemberImpl) RemoveMember(ctx context.Context, roomID string, 
 	}
 
 	return nil
+}
+
+// GetRoomMemberIDs implements RepositoryMembers.
+func (r *RepositoryMemberImpl) GetRoomMemberIDs(ctx context.Context, roomID string) ([]string, error) {
+	query := `SELECT user_id FROM room_members WHERE room_id = $1`
+	rows, err := r.db.QueryContext(ctx, query, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var userIDs []string
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
+			return nil, err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return userIDs, nil
 }
 
 var _ RepositoryMembers = (*RepositoryMemberImpl)(nil)

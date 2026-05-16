@@ -83,21 +83,21 @@ func (r *Room) handleUnregister(client *Client) {
 
 // handleBroadcast sends a message to all clients in the room
 func (r *Room) handleBroadcast(message *BroadcastMessage) {
-	log.Printf("Room %s started", r.ID)
-	defer log.Printf("Room %s stopped", r.ID)
+	log.Printf("Broadcasting message in room %s", r.ID)
 
 	for userID, client := range r.clients {
-		// Skip the sender if specified
+		// Skip sender
 		if message.Sender != "" && userID == message.Sender {
 			continue
 		}
 
 		select {
 		case client.Send <- message.Data:
-			// Message sent successfully
+			// sent successfully
+
 		case <-time.After(5 * time.Second):
-			// Client timeout - remove them
 			log.Printf("Client %s timeout in room %s", userID, r.ID)
+
 			go func(c *Client) {
 				r.unregister <- c
 			}(client)

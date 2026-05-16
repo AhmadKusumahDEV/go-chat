@@ -1,12 +1,23 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
+	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
+	"github.com/AhmadKusumahDEV/go-chat/internal/queue"
 )
+
+// MessageSender is a local interface to avoid importing services (which would cause a cycle).
+// services.MessageService satisfies this interface.
+type MessageSender interface {
+	SendMessage(ctx context.Context, req *request.CreateMessageRequest, senderID string) (*response.MessageResponse, error)
+}
 
 type WebsocketProcessor interface {
 	QueueMessage(msg *ProcessMessage)
@@ -19,11 +30,13 @@ type WebsocketProcessor interface {
 
 // MessageProcessorImpl implements MessageProcessor interface
 type MessageProcessorImpl struct {
-	workQueue chan *ProcessMessage
-	workers   int
-	hub       WebSocketHub
-	shutdown  chan struct{}
-	wg        sync.WaitGroup
+	workQueue      chan *ProcessMessage
+	workers        int
+	hub            WebSocketHub
+	messageService MessageSender
+	publisher      queue.Publisher
+	shutdown       chan struct{}
+	wg             sync.WaitGroup
 }
 
 type ProcessMessage struct {
@@ -33,13 +46,15 @@ type ProcessMessage struct {
 }
 
 // NewMessageProcessor creates a new message processor
-func NewMessageProcessor(workers int, hub WebSocketHub) WebsocketProcessor {
+func NewMessageProcessor(workers int, hub WebSocketHub, messageService MessageSender, publisher queue.Publisher) WebsocketProcessor {
 	return &MessageProcessorImpl{
-		workQueue: make(chan *ProcessMessage, 1000),
-		workers:   workers,
-		hub:       hub,
-		shutdown:  make(chan struct{}),
-		wg:        sync.WaitGroup{},
+		workQueue:      make(chan *ProcessMessage, 1000),
+		workers:        workers,
+		hub:            hub,
+		messageService: messageService,
+		publisher:      publisher,
+		shutdown:       make(chan struct{}),
+		wg:             sync.WaitGroup{},
 	}
 }
 
@@ -93,7 +108,44 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 
 	switch broadcastMsg.Type {
 	case "message_group":
-		mp.hub.BroadcastToRoom(broadcastMsg.RoomID, broadcastMsg.Data)
+		// 1. Parse the message body
+		var createMsgReq request.CreateMessageRequest
+		if err := json.Unmarshal(broadcastMsg.Data, &createMsgReq); err != nil {
+			log.Println("Invalid message payload", err)
+			return
+		}
+
+		// 2. Save to Database synchronously
+		ctx := context.Background()
+		savedMsg, err := mp.messageService.SendMessage(ctx, &createMsgReq, msg.UserID)
+		if err != nil {
+			log.Println("Failed to save message to DB", err)
+			errorRes, _ := json.Marshal(map[string]string{"type": "error", "message": err.Error()})
+			msg.Client.SendMessage(errorRes)
+			return
+		}
+
+		// Update the broadcast data with the final saved message (which includes ID, created_at, etc)
+		finalData, _ := json.Marshal(savedMsg)
+
+		// 3. Broadcast via WebSocket to active users
+		broadcastMsg.Sender = msg.UserID
+		mp.hub.BroadcastToRoomExcept(broadcastMsg.RoomID, finalData, msg.UserID)
+
+		// 4. Publish to RabbitMQ for offline push notifications
+		notifEvent := map[string]interface{}{
+			"type":      "message_group",
+			"messageId": savedMsg.ID,
+			"roomId":    savedMsg.RoomID,
+			"senderId":  msg.UserID,
+			"title":     "New Message",
+			"body":      savedMsg.Content,
+		}
+		log.Println("publish to user")
+		if err := mp.publisher.PublishNotification(ctx, notifEvent); err != nil {
+			log.Println("Failed to publish notification to RabbitMQ", err)
+		}
+
 	case "join_room":
 		mp.hub.SubscribeToRoom(broadcastMsg.RoomID, msg.Client)
 	case "leave_room":
@@ -113,11 +165,8 @@ func (mp *MessageProcessorImpl) validateMessage(msg *BroadcastMessage) error {
 func (mp *MessageProcessorImpl) QueueMessage(msg *ProcessMessage) {
 	select {
 	case mp.workQueue <- msg:
-
-	case <-time.After(3 * time.Second):
-		log.Println("Message queue full, dropping message after 3 second")
 		// Message queued successfully
-	default:
-		log.Println("Message queue full, dropping message")
+	case <-time.After(3 * time.Second):
+		log.Println("Message queue full, dropping message after 3 seconds")
 	}
 }

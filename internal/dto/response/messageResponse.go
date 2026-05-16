@@ -11,6 +11,7 @@ type MessageResponse struct {
 	ID          string              `json:"id"`
 	RoomID      string              `json:"room_id"`
 	SenderID    string              `json:"sender_id,omitempty"`
+	SenderName  string              `json:"sender_name,omitempty"`
 	Content     string              `json:"content"`
 	MessageType string              `json:"message_type"`
 	ReplyTo     string              `json:"reply_to,omitempty"`
@@ -26,6 +27,10 @@ func NewMessageResponse(msg *models.Message) *MessageResponse {
 		MessageType: msg.Type,
 		Attachments: msg.Attachments,
 		Timestamp:   msg.Timestamp,
+	}
+
+	if msg.SenderName != "" {
+		resp.SenderName = msg.SenderName
 	}
 
 	if msg.SenderID != nil && *msg.SenderID != uuid.Nil {

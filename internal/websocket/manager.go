@@ -1,10 +1,12 @@
 package websocket
 
 import (
+	"encoding/json"
 	"log"
 	"sync"
 	"time"
 
+	"github.com/AhmadKusumahDEV/go-chat/internal/queue"
 	"github.com/gorilla/websocket"
 )
 
@@ -40,16 +42,16 @@ type ManagerStats struct {
 }
 
 type BroadcastMessage struct {
-	RoomID string `json:"room_id"`
-	Data   []byte `json:"data"`
-	Sender string `json:"sender,omitempty"` // UserID of sender (for excluding)
-	Type   string `json:"type,omitempty"`   // Message type
+	RoomID string          `json:"room_id"`
+	Data   json.RawMessage `json:"data"`
+	Sender string          `json:"sender,omitempty"` // UserID of sender (for excluding)
+	Type   string          `json:"type,omitempty"`   // Message type
 }
 
 // NewWebSocketManager creates a new WebSocket manager
-func NewWebSocketManager() WebSocketManager {
+func NewWebSocketManager(messageService MessageSender, publisher queue.Publisher) WebSocketManager {
 	hub := NewHub()
-	processor := NewMessageProcessor(10, hub)
+	processor := NewMessageProcessor(10, hub, messageService, publisher)
 
 	manager := &WebSocketManagerImpl{
 		hub:       hub,

@@ -38,7 +38,7 @@ func (s *MessageServicesImpl) GetRoomMessages(ctx context.Context, roomID string
 		return nil, errors.New("forbidden: you are not a member of this room")
 	}
 
-	messages, err := s.messageRepo.FindByRoomID(ctx, roomID, 20)
+	messages, err := s.messageRepo.FindMessageByRoomID(ctx, roomID, 20)
 	if err != nil {
 		log.Println("error on services layer GetRoomMessages", err)
 		return nil, err

@@ -28,7 +28,7 @@ func NewMessageHandler(srv services.MessageService) HandlerMessage {
 
 // HandleGetRoomMessages returns the latest 20 messages for a room.
 func (h *HandlerMessageImpl) HandleGetRoomMessages(c *gin.Context) {
-	roomID := c.Param("id")
+	roomID := c.Param("room_id")
 
 	userInfo, exists := c.Get("user_info")
 	if !exists {

@@ -1,81 +1,85 @@
-// // cmd/worker/main.go
-// package main
+package main
 
-// import (
-// 	"context"
-// 	"log"
-// 	"os"
-// 	"os/signal"
-// 	"syscall"
+import (
+	"context"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
-// 	firebase "firebase.google.com/go/v4"
-// 	"github.com/rabbitmq/amqp091-go"
-// 	"google.golang.org/api/option"
+	"github.com/AhmadKusumahDEV/go-chat/internal/config"
+	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
+	"github.com/AhmadKusumahDEV/go-chat/internal/worker"
+)
 
-// 	"myapp/internal/repository"
-// 	"myapp/internal/worker"
-// )
+func main() {
+	log.Println("🔄 Starting workers...")
 
-// func main() {
-// 	log.Println("🔄 Starting workers...")
+	// 1. Load config
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
 
-// 	// 1. Setup database
-// 	db := setupDatabase()
-// 	defer db.Close()
+	// 2. Setup database
+	db, err := config.NewDB(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
 
-// 	// 2. Setup RabbitMQ
-// 	rabbitmqConn, err := amqp091.Dial("amqp://guest:guest@localhost:5672/")
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	defer rabbitmqConn.Close()
+	// 3. Setup RabbitMQ (using config wrapper with auto-reconnect)
+	rmq, err := config.NewRabbitMQ(&cfg.RabbitMQ)
+	if err != nil {
+		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+	}
+	defer rmq.Close()
 
-// 	rabbitmqChannel, err := rabbitmqConn.Channel()
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	defer rabbitmqChannel.Close()
+	// Worker needs its own dedicated channel
+	workerChannel, err := rmq.CreateChannel()
+	if err != nil {
+		log.Fatalf("Failed to create worker channel: %v", err)
+	}
+	defer workerChannel.Close()
 
-// 	// 3. Setup Firebase FCM
-// 	opt := option.WithCredentialsFile("firebase-credentials.json")
-// 	app, err := firebase.NewApp(context.Background(), nil, opt)
-// 	if err != nil {
-// 		log.Fatalf("Failed to initialize Firebase: %v", err)
-// 	}
+	// 4. Setup Firebase FCM
+	firebaseCredentialPath := "chat-appliaction-19fd5-firebase-adminsdk-fbsvc-51d924664f.json"
+	app, err := config.InitFirebase(context.Background(), "chat-appliaction-19fd5", firebaseCredentialPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize Firebase: %v", err)
+	}
 
-// 	fcmClient, err := app.Messaging(context.Background())
-// 	if err != nil {
-// 		log.Fatalf("Failed to get FCM client: %v", err)
-// 	}
+	fcmClient, err := app.Messaging(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to get FCM client: %v", err)
+	}
 
-// 	// 4. Setup repositories
-// 	messageRepo := repository.NewMessageRepository(db)
-// 	userRepo := repository.NewUserRepository(db)
+	// 5. Setup repositories
+	userRepo := repository.NewUserRepository(db)
+	messageRepo := repository.NewMessageRepository(db)
+	firebaseRepo := repository.NewFirebaseRepository(db)
+	memberRepo := repository.NewMemberRepository(db)
 
-// 	// 5. Create workers
-// 	messageWorker := worker.NewMessageWorker(rabbitmqChannel, messageRepo)
-// 	notificationWorker := worker.NewNotificationWorker(rabbitmqChannel, fcmClient, userRepo, messageRepo)
+	// 6. Create workers
+	notificationWorker := worker.NewNotificationWorker(workerChannel, fcmClient, userRepo, messageRepo, firebaseRepo, memberRepo)
 
-// 	ctx, cancel := context.WithCancel(context.Background())
-// 	defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-// 	// 6. Start workers (RUNNING TERUS MENERUS!)
-// 	if err := messageWorker.Start(ctx); err != nil {
-// 		log.Fatalf("Failed to start message worker: %v", err)
-// 	}
+	// 7. Start workers
+	if err := notificationWorker.Start(ctx); err != nil {
+		log.Fatalf("Failed to start notification worker: %v", err)
+	}
 
-// 	if err := notificationWorker.Start(ctx); err != nil {
-// 		log.Fatalf("Failed to start notification worker: %v", err)
-// 	}
+	log.Println("✅ All workers started")
 
-// 	log.Println("✅ All workers started")
+	// 8. Wait for shutdown signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
 
-// 	// 7. Wait for shutdown signal
-// 	quit := make(chan os.Signal, 1)
-// 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-// 	<-quit
+	log.Println("🛑 Shutting down workers...")
+	cancel() // Stop all workers
 
-// 	log.Println("🛑 Shutting down workers...")
-// 	cancel() // Stop all workers
-
-// 	log.Println("✅ Workers exited");
+	log.Println("✅ Workers exited")
+}

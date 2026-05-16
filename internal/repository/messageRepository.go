@@ -11,7 +11,7 @@ import (
 type MessageRepository interface {
 	RepositoryBased[*models.Message]
 
-	FindByRoomID(ctx context.Context, roomID string, limit int) ([]*models.Message, error)
+	FindMessageByRoomID(ctx context.Context, roomID string, limit int) ([]*models.Message, error)
 	UpdateContent(ctx context.Context, messageID string, userID string, newContent string) error
 }
 
@@ -27,17 +27,18 @@ func NewMessageRepository(db *sql.DB) MessageRepository {
 	}
 }
 
-// FindByRoomID returns the latest messages for a room, ordered newest first.
-func (r *RepositoryMessageImpl) FindByRoomID(ctx context.Context, roomID string, limit int) ([]*models.Message, error) {
-	query := `SELECT id, room_id, user_id, content, message_type, reply_to, attachments, timestamp
-			  FROM messages
-			  WHERE room_id = $1
-			  ORDER BY timestamp DESC
+// FindMessageByRoomID returns the latest messages for a room, ordered newest first.
+func (r *RepositoryMessageImpl) FindMessageByRoomID(ctx context.Context, roomID string, limit int) ([]*models.Message, error) {
+	query := `SELECT m.id, m.room_id, m.user_id, u.username, m.content, m.message_type, m.reply_to, m.attachments, m.timestamp
+			  FROM messages m
+			  LEFT JOIN users u ON m.user_id = u.id
+			  WHERE m.room_id = $1
+			  ORDER BY m.timestamp DESC
 			  LIMIT $2`
 
 	rows, err := r.db.QueryContext(ctx, query, roomID, limit)
 	if err != nil {
-		log.Println("err level database FindByRoomID", err)
+		log.Println("err level database FindMessageByRoomID", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -45,10 +46,12 @@ func (r *RepositoryMessageImpl) FindByRoomID(ctx context.Context, roomID string,
 	var messages []*models.Message
 	for rows.Next() {
 		var msg models.Message
+		var username sql.NullString
 		if err := rows.Scan(
 			&msg.ID,
 			&msg.RoomID,
 			&msg.SenderID,
+			&username,
 			&msg.Content,
 			&msg.Type,
 			&msg.ReplyTo,
@@ -56,6 +59,9 @@ func (r *RepositoryMessageImpl) FindByRoomID(ctx context.Context, roomID string,
 			&msg.Timestamp,
 		); err != nil {
 			return nil, err
+		}
+		if username.Valid {
+			msg.SenderName = username.String
 		}
 		messages = append(messages, &msg)
 	}

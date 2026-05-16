@@ -22,6 +22,7 @@ type Message struct {
 	ID          uuid.UUID   `db:"id,pk"`
 	RoomID      uuid.UUID   `db:"room_id"`
 	SenderID    *uuid.UUID  `db:"user_id"`
+	SenderName  string      `db:"-"` // Added for joined query
 	ReplyTo     *uuid.UUID  `db:"reply_to"`
 	Content     string      `db:"content"`
 	Type        string      `db:"message_type"`

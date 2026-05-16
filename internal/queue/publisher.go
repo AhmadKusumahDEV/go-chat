@@ -11,7 +11,7 @@ import (
 
 type Publisher interface {
 	PublishMessage(ctx context.Context, event *MessageEvent) error
-	PublishNotification(ctx context.Context, event *NotificationEvent) error
+	PublishNotification(ctx context.Context, event interface{}) error
 }
 
 type MessageEvent struct {
@@ -23,7 +23,10 @@ type NotificationEvent struct {
 	Type      string   `json:"type"`
 	MessageID string   `json:"messageId"`
 	RoomID    string   `json:"roomId"`
-	UserIDs   []string `json:"userIds"`
+	SenderID  string   `json:"senderId"`
+	Title     string   `json:"title"`
+	Body      string   `json:"body"`
+	UserIDs   []string `json:"userIds"` // Optional: If pre-calculated
 }
 
 // Implementation
@@ -56,7 +59,7 @@ func (p *rabbitMQPublisher) PublishMessage(ctx context.Context, event *MessageEv
 	)
 }
 
-func (p *rabbitMQPublisher) PublishNotification(ctx context.Context, event *NotificationEvent) error {
+func (p *rabbitMQPublisher) PublishNotification(ctx context.Context, event interface{}) error {
 	body, err := json.Marshal(event)
 	if err != nil {
 		return err

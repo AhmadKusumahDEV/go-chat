@@ -14,8 +14,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-
-
 // Config holds server configuration
 type ServerConfig struct {
 	// Server settings
