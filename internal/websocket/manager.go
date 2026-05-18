@@ -42,10 +42,10 @@ type ManagerStats struct {
 }
 
 type BroadcastMessage struct {
-	RoomID string          `json:"room_id"`
-	Data   json.RawMessage `json:"data"`
-	Sender string          `json:"sender,omitempty"` // UserID of sender (for excluding)
-	Type   string          `json:"type,omitempty"`   // Message type
+	RoomID   string          `json:"room_id"`
+	Data     json.RawMessage `json:"data"`
+	SenderID string          `json:"sender_id,omitempty"`
+	Type     string          `json:"type,omitempty"`
 }
 
 // NewWebSocketManager creates a new WebSocket manager

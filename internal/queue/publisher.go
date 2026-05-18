@@ -20,13 +20,15 @@ type MessageEvent struct {
 }
 
 type NotificationEvent struct {
-	Type      string   `json:"type"`
-	MessageID string   `json:"messageId"`
-	RoomID    string   `json:"roomId"`
-	SenderID  string   `json:"senderId"`
-	Title     string   `json:"title"`
-	Body      string   `json:"body"`
-	UserIDs   []string `json:"userIds"`
+	Type       string   `json:"type"`
+	MessageID  string   `json:"messageId"`
+	RoomID     string   `json:"roomId"`
+	RoomName   string   `json:"room_name"`
+	SenderID   string   `json:"senderId"`
+	SenderName string   `json:"sender_name"`
+	Title      string   `json:"title"`
+	Body       string   `json:"body"`
+	UserIDs    []string `json:"userIds"`
 }
 
 // Implementation

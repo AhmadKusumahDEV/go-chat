@@ -95,25 +95,21 @@ func (o *OauthServicesImpl) GitHubCallback(ctx context.Context, code string, sta
 		}
 	}
 
-	// 1. Exchange code → access_token
 	accessToken, err := o.GitHubExchangeCodeForToken(code)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code: %w", err)
 	}
 
-	// 2. Fetch user info dari GitHub
 	userInfo, err := o.fetchGitHubUserInfo(accessToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch user info: %w", err)
 	}
 
-	// 3. Find or create user
 	user, err := o.findOrCreateGitHubUser(ctx, userInfo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find or create user: %w", err)
 	}
 
-	// 4. Generate JWT tokens natively using helper
 	userInfoJwt := models.JwtUsersInfo{
 		UserID:   user.ID.String(),
 		Email:    user.Email,
@@ -196,7 +192,6 @@ func (s *OauthServicesImpl) fetchGitHubUserInfo(accessToken string) (*models.Git
 		return nil, err
 	}
 
-	// Kalau email null, fetch email separately
 	if userInfo.Email == "" {
 		email, err := s.fetchGitHubEmail(accessToken)
 		if err == nil {
@@ -207,7 +202,6 @@ func (s *OauthServicesImpl) fetchGitHubUserInfo(accessToken string) (*models.Git
 	return &userInfo, nil
 }
 
-// fetchGitHubEmail ambil primary email dari GitHub
 func (o *OauthServicesImpl) fetchGitHubEmail(accessToken string) (string, error) {
 	req, _ := http.NewRequest("GET", "https://api.github.com/user/emails", nil)
 	req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -241,10 +235,8 @@ func (o *OauthServicesImpl) fetchGitHubEmail(accessToken string) (string, error)
 func (o *OauthServicesImpl) findOrCreateGitHubUser(ctx context.Context, userInfo *models.GithubUserInfo) (*models.Users, error) {
 	oauthID := fmt.Sprintf("%d", userInfo.ID)
 
-	// 1. First try to find by provider_id
 	user, err := o.userRepo.FindByProviderID(ctx, "github", oauthID)
 	if err == nil {
-		// User found by provider_id, update profile
 		user.AvatarUrl = &userInfo.AvatarURL
 		if user.Username == "" {
 			user.Username = userInfo.Login
@@ -258,22 +250,17 @@ func (o *OauthServicesImpl) findOrCreateGitHubUser(ctx context.Context, userInfo
 		return user, nil
 	}
 
-	// If error is NOT "not found", return it
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 
-	// 2. Check if email already exists (user may have registered with email/password)
 	existingUser, errEmail := o.userRepo.FindByEmail(ctx, userInfo.Email)
 	if errEmail == nil {
-		// Email exists! Check if user already has a provider linked
 		if existingUser.ProviderName != nil && *existingUser.ProviderName != "" {
-			// User already has a different provider linked
 			return nil, fmt.Errorf("email %s is already registered with %s. Please login with %s instead.",
 				userInfo.Email, *existingUser.ProviderName, *existingUser.ProviderName)
 		}
 
-		// User registered with email/password, link this OAuth provider
 		providerName := "github"
 		existingUser.ProviderName = &providerName
 		existingUser.ProviderID = &oauthID
@@ -311,14 +298,11 @@ func (o *OauthServicesImpl) findOrCreateGitHubUser(ctx context.Context, userInfo
 	return newUser, nil
 }
 
-// GoogleCallBack implements OauthServices.
 func (o *OauthServicesImpl) GoogleCallBack(ctx context.Context, code string, state string, provider string) (*models.OauthResult, error) {
-	// 0. Validate state
 	var savedVerifier string
 
 	err := o.rds.Get(ctx, o.cfg.OAuth.GoogleClientID+state, &savedVerifier)
 	if err != nil {
-		// Fallback: cek DB
 		stateDB, errDB := o.oauthRepo.FindByState(ctx, state)
 		if errDB != nil {
 			return nil, fmt.Errorf("invalid or expired state (redis & db): %w", errDB)
@@ -336,25 +320,21 @@ func (o *OauthServicesImpl) GoogleCallBack(ctx context.Context, code string, sta
 		defer o.rds.Del(ctx, o.cfg.OAuth.GoogleClientID+state)
 	}
 
-	// 1. Exchange code → access_token
 	accessToken, err := o.ExchangeCodeForToken(ctx, code, savedVerifier)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code: %w", err)
 	}
 
-	// 2. Fetch user info from Google
 	userInfo, err := o.fetchGoogleUserInfo(accessToken.AccessToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch user info: %w", err)
 	}
 
-	// 3. Find or create user
 	user, err := o.findOrCreateGoogleUser(ctx, userInfo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find or create user: %w", err)
 	}
 
-	// 4. Generate JWT tokens
 	userInfoJwt := models.JwtUsersInfo{
 		UserID:   user.ID.String(),
 		Email:    user.Email,
@@ -410,7 +390,6 @@ func (o *OauthServicesImpl) ExchangeCodeForToken(ctx context.Context, code, veri
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		// Parse error response
 		var errResp struct {
 			Error       string `json:"error"`
 			Description string `json:"error_description"`
@@ -465,10 +444,8 @@ func (o *OauthServicesImpl) fetchGoogleUserInfo(accessToken string) (*models.Goo
 func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo *models.GoogleUserInfo) (*models.Users, error) {
 	oauthID := userInfo.ID
 
-	// 1. First try to find by provider_id
 	user, err := o.userRepo.FindByProviderID(ctx, "google", oauthID)
 	if err == nil {
-		// User found by provider_id, update profile
 		user.AvatarUrl = &userInfo.AvatarURL
 		if user.Username == "" {
 			user.Username = userInfo.Name
@@ -482,22 +459,17 @@ func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo
 		return user, nil
 	}
 
-	// If error is NOT "not found", return it
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 
-	// 2. Check if email already exists (user may have registered with email/password)
 	existingUser, errEmail := o.userRepo.FindByEmail(ctx, userInfo.Email)
 	if errEmail == nil {
-		// Email exists! Check if user already has a provider linked
 		if existingUser.ProviderName != nil && *existingUser.ProviderName != "" {
-			// User already has a different provider linked
 			return nil, fmt.Errorf("email %s is already registered with %s. Please login with %s instead.",
 				userInfo.Email, *existingUser.ProviderName, *existingUser.ProviderName)
 		}
 
-		// User registered with email/password, link this OAuth provider
 		providerName := "google"
 		existingUser.ProviderName = &providerName
 		existingUser.ProviderID = &oauthID
@@ -514,7 +486,6 @@ func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo
 		return &existingUser, nil
 	}
 
-	// 3. Email not found - create new user
 	newUser := &models.Users{
 		Username:     userInfo.Name,
 		Email:        userInfo.Email,
@@ -600,7 +571,6 @@ func NewOauthServices(config config.Cfg, redis cahce.CahceRedis, oauthRepo repos
 	}
 }
 
-// strPtr is a helper to get pointer to string
 func strPtr(s string) *string {
 	return &s
 }

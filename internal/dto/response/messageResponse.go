@@ -52,6 +52,13 @@ func NewMessageResponses(msgs []*models.Message) []*MessageResponse {
 	return responses
 }
 
+// MessageListResponse wraps paginated message list with metadata
+type MessageListResponse struct {
+	Data       []*MessageResponse `json:"data"`
+	HasMore    bool               `json:"has_more"`
+	NextCursor *string            `json:"next_cursor,omitempty"`
+}
+
 type GoogleTokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token,omitempty"`
@@ -75,8 +82,8 @@ type GoogleTokenResponse struct {
 // }
 
 type NotificationResponse struct {
-	RoomID 	   string `json:"room_id"`
-	Type   	   string `json:"type"`
+	RoomID     string `json:"room_id"`
+	Type       string `json:"type"`
 	Title      string `json:"title"`
 	Body       string `json:"body"`
 	SenderID   string `json:"sender_id"`

@@ -642,30 +642,30 @@
             const text = input.value.trim();
             if (!text) return;
 
-            const payload = {
+
+            // Get sender name from currentUser (set during login)
+            const senderName = currentUser ? currentUser.username : 'Unknown';
+
+            const wsPayload = {
                 type: 'message_group',
                 room_id: currentRoomID,
                 data: {
                     room_id: currentRoomID,
                     content: text,
-                    message_type: 'text'
+                    message_type: 'text',
+                    sender_name: senderName
                 }
             };
 
-            // The data field needs to be a JSON-encoded byte array for the processor
-            const wsPayload = {
-                type: 'message_group',
-                room_id: currentRoomID,
-                data: payload.data
-            };
-
             ws.send(JSON.stringify(wsPayload));
-            log(`⬆️ Sent: ${text}`, 'ws');
+            log('Sent: ' + text, 'ws');
+
 
             // Show optimistic message
             addMessage(text, 'sent', 'You', new Date().toLocaleTimeString());
             input.value = '';
         }
+
 
         function logout() {
             if (ws) ws.close();

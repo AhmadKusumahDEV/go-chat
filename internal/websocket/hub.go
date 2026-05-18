@@ -147,9 +147,9 @@ func (h *Hub) HandleBroadcast(message *BroadcastMessage) {
 	h.mutex.RUnlock()
 
 	if exists {
-		if message.Sender != "" {
+		if message.SenderID != "" {
 			// Broadcast to all except sender
-			room.BroadcastExcept(message.Data, message.Sender)
+			room.BroadcastExcept(message.Data, message.SenderID)
 		} else {
 			// Broadcast to all
 			room.Broadcast(message.Data)
@@ -175,9 +175,9 @@ func (h *Hub) BroadcastToRoom(roomID string, message []byte) {
 
 func (h *Hub) BroadcastToRoomExcept(roomID string, message []byte, exceptUserID string) {
 	h.broadcast <- &BroadcastMessage{
-		RoomID: roomID,
-		Data:   message,
-		Sender: exceptUserID,
+		RoomID:   roomID,
+		Data:     message,
+		SenderID: exceptUserID,
 	}
 }
 

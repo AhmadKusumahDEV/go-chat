@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"log"
 
@@ -12,7 +13,7 @@ import (
 )
 
 type MessageService interface {
-	GetRoomMessages(ctx context.Context, roomID string, userID string) ([]*response.MessageResponse, error)
+	GetRoomMessages(ctx context.Context, roomID string, userID string, limit int, cursor *string) (*response.MessageListResponse, error)
 	SendMessage(ctx context.Context, req *request.CreateMessageRequest, senderID string) (*response.MessageResponse, error)
 	EditMessage(ctx context.Context, messageID string, userID string, req *request.UpdateMessageRequest) error
 }
@@ -29,22 +30,37 @@ func NewMessageServices(messageRepo repository.MessageRepository, memberRepo rep
 	}
 }
 
-// GetRoomMessages returns the latest 20 messages for a room.
-// Only members of the room can view messages.
-func (s *MessageServicesImpl) GetRoomMessages(ctx context.Context, roomID string, userID string) ([]*response.MessageResponse, error) {
-	// Verify membership
+// GetRoomMessages returns paginated messages for a room with cursor-based pagination.
+func (s *MessageServicesImpl) GetRoomMessages(ctx context.Context, roomID string, userID string, limit int, cursor *string) (*response.MessageListResponse, error) {
 	_, err := s.memberRepo.FindMember(ctx, roomID, userID)
 	if err != nil {
 		return nil, errors.New("forbidden: you are not a member of this room")
 	}
 
-	messages, err := s.messageRepo.FindMessageByRoomID(ctx, roomID, 20)
+	if limit <= 0 {
+		limit = 20
+	}
+
+	messages, hasMore, err := s.messageRepo.FindMessageByRoomID(ctx, roomID, limit, cursor)
 	if err != nil {
 		log.Println("error on services layer GetRoomMessages", err)
 		return nil, err
 	}
 
-	return response.NewMessageResponses(messages), nil
+	messageResponses := response.NewMessageResponses(messages)
+
+	var nextCursor *string
+	if hasMore && len(messages) > 0 {
+		lastMsg := messages[len(messages)-1]
+		encoded := encodeCursor(lastMsg.Timestamp)
+		nextCursor = &encoded
+	}
+
+	return &response.MessageListResponse{
+		Data:       messageResponses,
+		HasMore:    hasMore,
+		NextCursor: nextCursor,
+	}, nil
 }
 
 func (s *MessageServicesImpl) SendMessage(ctx context.Context, req *request.CreateMessageRequest, senderID string) (*response.MessageResponse, error) {
@@ -81,4 +97,17 @@ func (s *MessageServicesImpl) EditMessage(ctx context.Context, messageID string,
 	}
 
 	return nil
+}
+
+// encodeCursor encodes a timestamp to base64 for use as cursor
+func encodeCursor(timestamp interface{}) string {
+	var ts interface{} = timestamp
+	switch v := ts.(type) {
+	case []byte:
+		return base64.StdEncoding.EncodeToString(v)
+	case string:
+		return base64.StdEncoding.EncodeToString([]byte(v))
+	default:
+		return ""
+	}
 }

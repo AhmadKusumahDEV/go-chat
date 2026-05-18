@@ -109,7 +109,6 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 
 	switch broadcastMsg.Type {
 	case "message_group":
-		// 1. Parse the message body
 		var createMsgReq request.CreateMessageRequest
 		if err := json.Unmarshal(broadcastMsg.Data, &createMsgReq); err != nil {
 			log.Println("Invalid message payload", err)
@@ -117,7 +116,6 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 		}
 		log.Println("log create msg: ", createMsgReq)
 
-		// 2. Save to Database synchronously
 		ctx := context.Background()
 		savedMsg, err := mp.messageService.SendMessage(ctx, &createMsgReq, msg.UserID)
 		if err != nil {
@@ -127,21 +125,18 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 			return
 		}
 
-		// Update the broadcast data with the final saved message (which includes ID, created_at, etc)
-		finalData, _ := json.Marshal(savedMsg)
+		broadcastMsg.SenderID = msg.UserID
+		mp.hub.BroadcastToRoomExcept(broadcastMsg.RoomID, broadcastMsg.Data, msg.UserID)
 
-		// 3. Broadcast via WebSocket to active users
-		broadcastMsg.Sender = msg.UserID
-		mp.hub.BroadcastToRoomExcept(broadcastMsg.RoomID, finalData, msg.UserID)
-
-		// 4. Publish to RabbitMQ for offline push notifications
-		notifEvent := map[string]interface{}{
-			"type":      "message_group",
-			"messageId": savedMsg.ID,
-			"roomId":    savedMsg.RoomID,
-			"senderId":  msg.UserID,
-			"title":     "New Message",
-			"body":      savedMsg.Content,
+		// Publish notification using proper struct with all fields for better FCM notification
+		notifEvent := queue.NotificationEvent{
+			Type:       "message_group",
+			MessageID:  savedMsg.ID,
+			RoomID:     savedMsg.RoomID,
+			SenderID:   msg.UserID,
+			SenderName: savedMsg.SenderName,
+			Title:      "New Message",
+			Body:       savedMsg.Content,
 		}
 		log.Println("publish to user")
 		if err := mp.publisher.PublishNotification(ctx, notifEvent); err != nil {

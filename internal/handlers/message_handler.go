@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
@@ -26,9 +27,30 @@ func NewMessageHandler(srv services.MessageService) HandlerMessage {
 	return &HandlerMessageImpl{srv: srv}
 }
 
-// HandleGetRoomMessages returns the latest 20 messages for a room.
+// HandleGetRoomMessages returns paginated messages for a room.
 func (h *HandlerMessageImpl) HandleGetRoomMessages(c *gin.Context) {
 	roomID := c.Param("room_id")
+
+	query := c.Request.URL.Query()
+
+	nextCursor := query.Get("next_cursor")
+	var cursorPtr *string
+	if nextCursor != "" {
+		cursorPtr = &nextCursor
+	}
+
+	limitStr := query.Get("limit")
+	limit := 20 // default
+	if limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	if _, err := uuid.FromString(roomID); err != nil {
+		c.AbortWithError(http.StatusBadRequest, errors.New("invalid room ID format"))
+		return
+	}
 
 	userInfo, exists := c.Get("user_info")
 	if !exists {
@@ -38,23 +60,22 @@ func (h *HandlerMessageImpl) HandleGetRoomMessages(c *gin.Context) {
 
 	jwtUserInfo := userInfo.(*models.JwtUsersInfo)
 
-	_, err := uuid.FromString(jwtUserInfo.UserID)
-	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("invalid room ID format"))
+	if _, err := uuid.FromString(jwtUserInfo.UserID); err != nil {
+		c.AbortWithError(http.StatusBadRequest, errors.New("invalid user ID format"))
 		return
 	}
 
-	messages, err := h.srv.GetRoomMessages(c.Request.Context(), roomID, jwtUserInfo.UserID)
+	result, err := h.srv.GetRoomMessages(c.Request.Context(), roomID, jwtUserInfo.UserID, limit, cursorPtr)
 	if err != nil {
-		c.AbortWithError(http.StatusForbidden, err)
+		if err.Error() == "forbidden: you are not a member of this room" {
+			c.AbortWithError(http.StatusForbidden, err)
+			return
+		}
+		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, response.ApiResponse{
-		Status:  http.StatusOK,
-		Message: "success",
-		Data:    messages,
-	})
+	c.JSON(http.StatusOK, result)
 }
 
 // HandleSendMessage creates a new message in a room.
@@ -73,7 +94,11 @@ func (h *HandlerMessageImpl) HandleSendMessage(c *gin.Context) {
 
 	msg, err := h.srv.SendMessage(c.Request.Context(), &req, userID.(string))
 	if err != nil {
-		c.AbortWithError(http.StatusForbidden, err)
+		if err.Error() == "forbidden: you are not a member of this room" {
+			c.AbortWithError(http.StatusForbidden, err)
+			return
+		}
+		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 

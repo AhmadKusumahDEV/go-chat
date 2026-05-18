@@ -19,6 +19,7 @@ type RepositoryRoom interface {
 	FindMemberRoom(ctx context.Context, roomID string) ([]*models.MemberComposite, error)
 	FindRoomDetail(ctx context.Context, roomID string) (*models.RoomDetail, error)
 	FindRoomMembers(ctx context.Context, roomID string) ([]models.MemberDetail, error)
+	FindRoomName(ctx context.Context, roomID string) (string, error)
 	CreateWithMember(ctx context.Context, room *models.Room, members []*models.Members) error
 }
 
@@ -200,6 +201,20 @@ func (p *RepositoryRoomImpl) FindRoomMembers(ctx context.Context, roomID string)
 	}
 
 	return members, nil
+}
+
+// FindRoomName implements RepositoryRoom - returns room name by room ID
+func (p *RepositoryRoomImpl) FindRoomName(ctx context.Context, roomID string) (string, error) {
+	query := `SELECT room_name FROM rooms WHERE id = $1`
+	var roomName string
+	err := p.db.QueryRowContext(ctx, query, roomID).Scan(&roomName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("room not found: %s", roomID)
+		}
+		return "", err
+	}
+	return roomName, nil
 }
 
 func NewRoomRepository(db *sql.DB) RepositoryRoom {

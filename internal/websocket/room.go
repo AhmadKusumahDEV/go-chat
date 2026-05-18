@@ -86,14 +86,12 @@ func (r *Room) handleBroadcast(message *BroadcastMessage) {
 	log.Printf("Broadcasting message in room %s", r.ID)
 
 	for userID, client := range r.clients {
-		// Skip sender
-		if message.Sender != "" && userID == message.Sender {
+		if message.SenderID != "" && userID == message.SenderID {
 			continue
 		}
 
 		select {
 		case client.Send <- message.Data:
-			// sent successfully
 
 		case <-time.After(5 * time.Second):
 			log.Printf("Client %s timeout in room %s", userID, r.ID)
@@ -125,9 +123,9 @@ func (r *Room) Broadcast(message []byte) {
 
 func (r *Room) BroadcastExcept(message []byte, exceptUserID string) {
 	r.broadcast <- &BroadcastMessage{
-		RoomID: r.ID,
-		Data:   message,
-		Sender: exceptUserID,
+		RoomID:   r.ID,
+		Data:     message,
+		SenderID: exceptUserID,
 	}
 }
 

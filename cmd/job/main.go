@@ -17,16 +17,12 @@ func main() {
 	log.Println("🚀 Starting Go-Chat Workers")
 	log.Println("═══════════════════════════════════════════════════════════════")
 
-	// 1. Load config
-	log.Println("📋 Loading configuration...")
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("❌ Failed to load config: %v", err)
 	}
 	log.Printf("✅ Config loaded | Environment: %s", cfg.AppEnv)
 
-	// 2. Setup database
-	log.Println("🔌 Connecting to PostgreSQL...")
 	db, err := config.NewDB(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("❌ Failed to connect to database: %v", err)
@@ -34,8 +30,6 @@ func main() {
 	log.Println("✅ PostgreSQL connected")
 	defer db.Close()
 
-	// 3. Setup RabbitMQ (using config wrapper with auto-reconnect)
-	log.Println("🐰 Connecting to RabbitMQ...")
 	rmq, err := config.NewRabbitMQ(&cfg.RabbitMQ)
 	if err != nil {
 		log.Fatalf("❌ Failed to connect to RabbitMQ: %v", err)
@@ -43,8 +37,6 @@ func main() {
 	log.Println("✅ RabbitMQ connected")
 	defer rmq.Close()
 
-	// Worker needs its own dedicated channel
-	log.Println("📡 Creating RabbitMQ worker channel...")
 	workerChannel, err := rmq.CreateChannel()
 	if err != nil {
 		log.Fatalf("❌ Failed to create worker channel: %v", err)
@@ -52,7 +44,6 @@ func main() {
 	log.Println("✅ Worker channel created")
 	defer workerChannel.Close()
 
-	// 4. Setup Firebase FCM
 	firebaseCredentialPath := "chat-appliaction-19fd5-firebase-adminsdk-fbsvc-51d924664f.json"
 	log.Printf("📱 Firebase credential path: %s", firebaseCredentialPath)
 	log.Printf("📱 Firebase project: chat-appliaction-19fd5")
@@ -74,9 +65,10 @@ func main() {
 	messageRepo := repository.NewMessageRepository(db)
 	firebaseRepo := repository.NewFirebaseRepository(db)
 	memberRepo := repository.NewMemberRepository(db)
+	roomRepo := repository.NewRoomRepository(db)
 
 	// 6. Create workers
-	notificationWorker := worker.NewNotificationWorker(workerChannel, fcmClient, userRepo, messageRepo, firebaseRepo, memberRepo)
+	notificationWorker := worker.NewNotificationWorker(workerChannel, fcmClient, userRepo, messageRepo, firebaseRepo, memberRepo, roomRepo)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
