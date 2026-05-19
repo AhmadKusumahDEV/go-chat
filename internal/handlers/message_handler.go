@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -74,6 +75,8 @@ func (h *HandlerMessageImpl) HandleGetRoomMessages(c *gin.Context) {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
+
+	log.Println(result)
 
 	c.JSON(http.StatusOK, result)
 }

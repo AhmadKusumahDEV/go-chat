@@ -9,7 +9,7 @@ import (
 
 type Room struct {
 	ID          uuid.UUID `db:"id,pk,auto"` // pk=primary key, auto=auto increment
-	Name        string    `db:"name"`
+	Name        string    `db:"room_name"`
 	Roomtype    string    `db:"room_type"`
 	Description string    `db:"description"`
 	Isprivate   bool      `db:"is_private"`

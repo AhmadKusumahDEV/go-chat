@@ -10,6 +10,7 @@ import (
 type RepositoryMembers interface {
 	RepositoryBased[*models.Members]
 
+	CreateBatch(ctx context.Context, members []*models.Members) error
 	FindMember(ctx context.Context, roomID string, userID string) (*models.Members, error)
 	RemoveMember(ctx context.Context, roomID string, userID string) error
 	GetRoomMemberIDs(ctx context.Context, roomID string) ([]string, error)
@@ -44,6 +45,34 @@ func (r *RepositoryMemberImpl) FindMember(ctx context.Context, roomID string, us
 	}
 
 	return &member, nil
+}
+
+// CreateBatch implements RepositoryMembers.
+func (r *RepositoryMemberImpl) CreateBatch(ctx context.Context, members []*models.Members) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO room_members (room_id, user_id, added_by, role, joined_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (room_id, user_id) DO NOTHING
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, m := range members {
+		_, err := stmt.ExecContext(ctx, m.Roomid, m.Userid, m.AddedBy, m.Role)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 // RemoveMember implements RepositoryMembers.

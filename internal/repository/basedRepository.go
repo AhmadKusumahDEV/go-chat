@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -121,6 +122,8 @@ func (r *BaseRepository[T]) FindByID(ctx context.Context, id any) (T, error) {
 		zero.TableName(),
 	)
 
+	log.Println(query)
+
 	// 3. Execute query
 	row := r.db.QueryRowContext(ctx, query, id)
 
@@ -176,12 +179,11 @@ func (r *BaseRepository[T]) FindAll(ctx context.Context) ([]T, error) {
 
 // Update - Automatically generates UPDATE query
 func (r *BaseRepository[T]) Update(ctx context.Context, entity T) error {
-	var zero T
 	if err := entity.Validate(); err != nil {
 		return err
 	}
 
-	fields, err := helpers.ExtractFields(zero)
+	fields, err := helpers.ExtractFields(entity)
 	if err != nil {
 		return err
 	}

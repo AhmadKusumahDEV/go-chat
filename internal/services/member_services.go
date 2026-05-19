@@ -10,12 +10,14 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
 	"github.com/AhmadKusumahDEV/go-chat/internal/helpers"
+	"github.com/AhmadKusumahDEV/go-chat/internal/models"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
 	"github.com/go-playground/validator/v10"
+	"github.com/gofrs/uuid"
 )
 
 type MemberService interface {
-	AddMember(ctx context.Context, member request.AddMember) error
+	AddMember(ctx context.Context, member request.AddMemberRequest) error
 	GetMembers(ctx context.Context, roomID string) ([]*response.MemberResponse, error)
 	LeaveRoom(ctx context.Context, roomID string, userID string) error
 	RemoveMember(ctx context.Context, roomID string, targetUserID string, removedByUserID string) error
@@ -38,7 +40,7 @@ func NewMemberServices(roomRepository repository.RepositoryRoom, memberRepositor
 }
 
 // AddMember implements MemberService.
-func (m *MemberServiceImpl) AddMember(ctx context.Context, member request.AddMember) error {
+func (m *MemberServiceImpl) AddMember(ctx context.Context, member request.AddMemberRequest) error {
 	err := m.validate.Struct(member)
 	if err != nil {
 		log.Println("error on services layer with name AddMember in validate process", err)
@@ -61,12 +63,32 @@ func (m *MemberServiceImpl) AddMember(ctx context.Context, member request.AddMem
 		}
 	}
 
-	members, err := member.ToModel()
+	addedByUUID, err := uuid.FromString(member.AddMemberBy)
 	if err != nil {
-		return err
+		return errors.New("invalid added_by UUID format")
 	}
 
-	err = m.memberRepository.Create(ctx, members)
+	members := make([]*models.Members, 0, len(member.Members))
+	for _, memberIDStr := range member.Members {
+		memberUUID, err := uuid.FromString(memberIDStr)
+		if err != nil {
+			log.Printf("invalid member uuid provided: %s", memberIDStr)
+			continue
+		}
+
+		members = append(members, &models.Members{
+			Roomid:  room.ID,
+			Userid:  memberUUID,
+			AddedBy: addedByUUID,
+			Role:    member.Role,
+		})
+	}
+
+	if len(members) == 0 {
+		return errors.New("no valid members to add")
+	}
+
+	err = m.memberRepository.CreateBatch(ctx, members)
 	if err != nil {
 		return err
 	}

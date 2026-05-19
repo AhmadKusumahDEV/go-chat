@@ -18,7 +18,7 @@ import (
 type UsersServices interface {
 	LoginUser(ctx context.Context, req *request.LoginRequest) (*response.JwtReponse, error)
 	RegisterUser(ctx context.Context, req *request.RegisterRequest) error
-	RefreshUser(ctx context.Context, req *request.RefreshRequest) (*response.JwtReponse, error)
+	RefreshUser(ctx context.Context, refreshToken string) (*response.JwtReponse, error)
 	GetAllUser(ctx context.Context) ([]*response.UserResponse, error)
 	StoreFirebaseToken(ctx context.Context, fcm *request.FcmRequest, userId uuid.UUID) error
 }
@@ -73,8 +73,9 @@ func (u *UsersServivesImpl) LoginUser(ctx context.Context, req *request.LoginReq
 }
 
 // RefreshUser implements UsersServices.
-func (u *UsersServivesImpl) RefreshUser(ctx context.Context, req *request.RefreshRequest) (*response.JwtReponse, error) {
-	claims, err := helpers.GetUserJWT(req.RefreshToken, u.jwtConfig.SecretKeyrefresh)
+// Accepts refresh token as string parameter
+func (u *UsersServivesImpl) RefreshUser(ctx context.Context, refreshToken string) (*response.JwtReponse, error) {
+	claims, err := helpers.GetUserJWT(refreshToken, u.jwtConfig.SecretKeyrefresh)
 	if err != nil {
 		return nil, errors.New("invalid or expired refresh token")
 	}

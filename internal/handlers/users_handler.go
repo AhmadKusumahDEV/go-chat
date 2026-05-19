@@ -58,16 +58,15 @@ func (u *UserHandlerImpl) HandlerLogin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": resp.AccessToken, "refresh_token": resp.RefreshToken})
 }
 
-// HandlerRefresh implements UserHandler.
+// Reads refresh token from Authorization header: "Bearer <token>"
 func (u *UserHandlerImpl) HandlerRefresh(c *gin.Context) {
-	refreshPayload := new(request.RefreshRequest)
-
-	if err := c.ShouldBindJSON(refreshPayload); err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.AbortWithError(http.StatusBadRequest, errors.New("authorization header is required"))
 		return
 	}
 
-	resp, err := u.services.RefreshUser(c.Request.Context(), refreshPayload)
+	resp, err := u.services.RefreshUser(c.Request.Context(), authHeader)
 
 	if err != nil {
 		c.AbortWithError(http.StatusUnauthorized, err)
@@ -75,7 +74,7 @@ func (u *UserHandlerImpl) HandlerRefresh(c *gin.Context) {
 	}
 
 	c.Set("user_info", resp.Userinfo)
-	c.JSON(http.StatusOK, gin.H{"Token": resp.AccessToken, "refresh_token": resp.RefreshToken})
+	c.JSON(http.StatusOK, gin.H{"token": resp.AccessToken, "refresh_token": resp.RefreshToken})
 }
 
 // HandlerRegister implements UserHandler.

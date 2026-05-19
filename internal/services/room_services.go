@@ -109,7 +109,6 @@ func (r *RoomServiceImpl) CreateRoom(ctx context.Context, req *request.CreateRoo
 
 // DeleteRoom implements RoomService.
 func (r *RoomServiceImpl) DeleteRoom(ctx context.Context, roomID string, deletedBy string) error {
-	// 1. VALIDASI FORMAT UUID
 	rUUID, err := uuid.FromString(roomID)
 	if err != nil || rUUID == uuid.Nil {
 		return errors.New("invalid room id format")
@@ -120,32 +119,24 @@ func (r *RoomServiceImpl) DeleteRoom(ctx context.Context, roomID string, deleted
 		return errors.New("invalid user id format")
 	}
 
-	// 2. AMBIL DATA ROOM (EXISTENCE CHECK)
 	room, err := r.roomRepository.FindByID(ctx, rUUID)
 	if err != nil {
-		// Asumsi repository return error specific jika tidak ketemu
 		return err
 	}
 
-	// 3. AUTHORIZATION CHECK 🔒
-	// Opsi A: Hanya Creator yang boleh hapus (Paling Aman)
 	if room.CreatedBy != userUUID {
 		return errors.New("forbidden: only the room creator can delete this room")
 	}
 
-	/* //
-	   member, err := r.memberRepository.FindMember(ctx, rUUID, userUUID)
-	   if err != nil {
-	       return errors.New("forbidden: you are not a member of this room")
-	   }
+	member, err := r.memberRepository.FindMember(ctx, roomID, deletedBy)
+	if err != nil {
+		return errors.New("forbidden: you are not a member of this room")
+	}
 
-	   if room.CreatedBy != userUUID && member.Role != "admin" {
-	       return errors.New("forbidden: insufficient permission to delete room")
-	   }
-	*/
+	if room.CreatedBy != userUUID && member.Role != "admin" {
+		return errors.New("forbidden: insufficient permission to delete room")
+	}
 
-	// 4. EKSEKUSI DELETE
-	//    because room_members have  ON DELETE CASCADE
 	err = r.roomRepository.Delete(ctx, rUUID)
 	if err != nil {
 		return err

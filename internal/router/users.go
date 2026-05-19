@@ -16,10 +16,10 @@ func (r *UsersRoutes) RegisterRoutes(router *gin.Engine, srv *config.Server) {
 	usersgroup := router.Group("/api/users")
 
 	usersgroup.GET("/", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerGetAllUser)
+	usersgroup.GET("/refresh", r.handle.HandlerRefresh)
 
 	usersgroup.POST("/register", r.handle.HandlerRegister)
 	usersgroup.POST("/login", r.handle.HandlerLogin)
-	usersgroup.POST("/refresh", r.handle.HandlerRefresh)
 	usersgroup.POST("/fcm-token", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerFcmToken)
 }
 

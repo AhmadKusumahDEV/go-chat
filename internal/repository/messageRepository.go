@@ -35,8 +35,7 @@ func NewMessageRepository(db *sql.DB) MessageRepository {
 // Returns messages, hasMore boolean, and error.
 func (r *RepositoryMessageImpl) FindMessageByRoomID(ctx context.Context, roomID string, limit int, cursor *string) ([]*models.Message, bool, error) {
 	var query string
-	var rows *sql.Rows
-	var err error
+	var args []any
 
 	if cursor != nil && *cursor != "" {
 		timestamp, decodeErr := decodeCursor(*cursor)
@@ -47,8 +46,7 @@ func (r *RepositoryMessageImpl) FindMessageByRoomID(ctx context.Context, roomID 
 					WHERE m.room_id = $1 AND m.timestamp < $2
 					ORDER BY m.timestamp DESC
 					LIMIT $3`
-
-			rows, err = r.db.QueryContext(ctx, query, roomID, timestamp, limit+1)
+			args = []any{roomID, timestamp, limit + 1}
 		} else {
 			query = `SELECT m.id, m.room_id, m.user_id, u.username, m.content, m.message_type, m.reply_to, m.attachments, m.timestamp
 					FROM messages m
@@ -56,7 +54,7 @@ func (r *RepositoryMessageImpl) FindMessageByRoomID(ctx context.Context, roomID 
 					WHERE m.room_id = $1
 					ORDER BY m.timestamp DESC
 					LIMIT $2`
-			rows, err = r.db.QueryContext(ctx, query, roomID, limit+1)
+			args = []any{roomID, limit + 1}
 		}
 	} else {
 		query = `SELECT m.id, m.room_id, m.user_id, u.username, m.content, m.message_type, m.reply_to, m.attachments, m.timestamp
@@ -65,9 +63,10 @@ func (r *RepositoryMessageImpl) FindMessageByRoomID(ctx context.Context, roomID 
 				WHERE m.room_id = $1
 				ORDER BY m.timestamp DESC
 				LIMIT $2`
-		rows, err = r.db.QueryContext(ctx, query, roomID, limit+1)
+		args = []any{roomID, limit + 1}
 	}
 
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		log.Println("err level database FindMessageByRoomID", err)
 		return nil, false, err
@@ -75,7 +74,6 @@ func (r *RepositoryMessageImpl) FindMessageByRoomID(ctx context.Context, roomID 
 	defer rows.Close()
 
 	var messages []*models.Message
-	count := 0
 
 	for rows.Next() {
 		var msg models.Message
@@ -97,18 +95,17 @@ func (r *RepositoryMessageImpl) FindMessageByRoomID(ctx context.Context, roomID 
 			msg.SenderName = username.String
 		}
 		messages = append(messages, &msg)
-		count++
-
-		if count >= limit {
-			break
-		}
 	}
 
 	if err = rows.Err(); err != nil {
 		return nil, false, err
 	}
 
-	hasMore := count > limit
+	hasMore := len(messages) > limit
+	if len(messages) > limit {
+		messages = messages[:limit]
+	}
+
 	return messages, hasMore, nil
 }
 

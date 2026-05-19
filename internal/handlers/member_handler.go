@@ -29,7 +29,7 @@ func NewMemberHandler(srv services.MemberService) HandlerMember {
 
 // HandleAddMember implements HandlerMember.
 func (h *HandlerMemberImpl) HandleAddMember(c *gin.Context) {
-	var member request.AddMember
+	var member request.AddMemberRequest
 
 	err := c.ShouldBindJSON(&member)
 
@@ -57,7 +57,7 @@ func (h *HandlerMemberImpl) HandleAddMember(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, response.ApiResponse{
 		Status:  http.StatusCreated,
-		Message: "success",
+		Message: "members added successfully",
 		Data:    nil,
 	})
 }

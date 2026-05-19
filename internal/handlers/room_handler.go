@@ -67,6 +67,8 @@ func (r *HandlerRoomImpl) HandlerUpdatedRoom(c *gin.Context) {
 		return
 	}
 
+	roomID := c.Param("id")
+
 	var req request.UpdateRoomRequest
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
@@ -80,7 +82,7 @@ func (r *HandlerRoomImpl) HandlerUpdatedRoom(c *gin.Context) {
 		return
 	}
 
-	err = r.srv.UpdateRoom(c.Request.Context(), userID.(string), userID.(string), &req)
+	err = r.srv.UpdateRoom(c.Request.Context(), roomID, userID.(string), &req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			c.AbortWithError(http.StatusGatewayTimeout, errors.New("Request Timeout"))
