@@ -38,6 +38,10 @@ func (a Attachments) Value() (driver.Value, error) {
 }
 
 func (a *Attachments) Scan(value any) error {
+	if value == nil {
+		*a = Attachments{}
+		return nil
+	}
 	bytes, ok := value.([]byte)
 	if !ok {
 		return errors.New("type assertion to []byte failed")

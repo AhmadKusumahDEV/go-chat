@@ -12,6 +12,7 @@ type RepositoryUser interface {
 
 	FindByEmail(ctx context.Context, email string) (models.Users, error)
 	FindByProviderID(ctx context.Context, providerName string, providerID string) (*models.Users, error)
+	FindByIDs(ctx context.Context, userIDs []string) ([]models.Users, error)
 }
 
 type RepositoryUserImpl struct {
@@ -66,6 +67,43 @@ func (r *RepositoryUserImpl) FindByProviderID(ctx context.Context, providerName 
 	}
 
 	return &user, nil
+}
+
+// FindByIDs implements RepositoryUser - finds multiple users by their IDs
+func (r *RepositoryUserImpl) FindByIDs(ctx context.Context, userIDs []string) ([]models.Users, error) {
+	if len(userIDs) == 0 {
+		return []models.Users{}, nil
+	}
+
+	// Build query with placeholder
+	query := `SELECT id, username, email, password_hash, created_at, avatar_url, provider_name, provider_id FROM users WHERE id = ANY($1)`
+	rows, err := r.db.QueryContext(ctx, query, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []models.Users
+	for rows.Next() {
+		var user models.Users
+		if err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.Email,
+			&user.Password,
+			&user.CreatedAt,
+			&user.AvatarUrl,
+			&user.ProviderName,
+			&user.ProviderID,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return users, nil
 }
 
 func NewUserRepository(db *sql.DB) RepositoryUser {
