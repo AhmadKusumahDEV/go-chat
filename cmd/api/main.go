@@ -18,6 +18,7 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"firebase.google.com/go/v4/messaging"
 )
 
 // var upgrade websocket.Upgrader = websocket.Upgrader{
@@ -63,6 +64,24 @@ func main() {
 	log.Println(cfg.DatabaseURL)
 	log.Println(cfg.Redis)
 	log.Println(cfg.RabbitMQ)
+
+	// Initialize Firebase
+	firebaseCredentialPath := "chat-appliaction-19fd5-firebase-adminsdk-fbsvc-51d924664f.json"
+	app, err := config.InitFirebase(appContext, "chat-appliaction-19fd5", firebaseCredentialPath)
+	if err != nil {
+		log.Printf("⚠️  Warning: Failed to initialize Firebase: %v", err)
+		log.Println("   Push notification endpoints will not work")
+	}
+
+	var fcmClient *messaging.Client
+	if app != nil {
+		fcmClient, err = app.Messaging(appContext)
+		if err != nil {
+			log.Printf("⚠️  Warning: Failed to get FCM client: %v", err)
+		} else {
+			log.Println("✅ FCM client ready")
+		}
+	}
 
 	// RabbitMQ (using config wrapper with auto-reconnect)
 	rmq, err := config.NewRabbitMQ(&cfg.RabbitMQ)
@@ -122,6 +141,8 @@ func main() {
 	authRouter := router.NewAuthRouter(oauthHandler)
 	messageRouter := router.NewMessageRouter(messageHandler)
 	memberRouter := router.NewMemberRouter(memberHandler)
+	testPushHandler := handlers.NewTestPushNotificationHandler(fcmClient, firebaseRepository, roomRepository)
+	testPushRouter := handlers.NewTestPushRouter(testPushHandler)
 
 	if err != nil {
 		panic(err)
@@ -143,7 +164,7 @@ func main() {
 		})
 	})
 
-	server.RegisterRoutes(roomRouter, UsersRouter, wsRouter, authRouter, messageRouter, memberRouter)
+	server.RegisterRoutes(roomRouter, UsersRouter, wsRouter, authRouter, messageRouter, memberRouter, testPushRouter)
 
 	err = server.Start()
 

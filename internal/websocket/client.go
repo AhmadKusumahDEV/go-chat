@@ -80,7 +80,6 @@ func (c *Client) WritePump() {
 	for {
 		select {
 		case message, ok := <-c.Send:
-			log.Println(message)
 			log.Println(ok)
 			err := c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err != nil {
@@ -95,9 +94,18 @@ func (c *Client) WritePump() {
 
 			w, err := c.Conn.NextWriter(websocket.TextMessage)
 			if err != nil {
+				log.Println("Failed to get next writer:", err)
+				log.Println(err)
 				return
 			}
-			w.Write(message)
+			res, err := w.Write(message)
+			log.Println(res)
+			log.Println(err)
+			if err != nil {
+				log.Println("Failed to write message:", err)
+				log.Println(err)
+				return
+			}
 
 			// Add queued messages to current WebSocket message
 			n := len(c.Send)
