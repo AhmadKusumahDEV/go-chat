@@ -1,0 +1,17 @@
+ 45     log.Println(cfg.Firebase)
+ 46
+ 47     app, err := config.InitFirebase(appContext, "chat-appliaction-19fd5", cfg.Firebase.Path)
+ 48     log.Println(err)
+ 49     if err != nil {
+ 50         log.Println("cannot init firebase:", err)
+ 51     }
+ 52
+ 53     clientmessage, err := app.Messaging(appContext)
+ 54     if err != nil {
+ 55         log.Println("cannot setup message firebase:", err)
+ 56     }
+ 57
+ 58     err = config.SendToDevice(appContext, clientmessage, "fH743pD6QnGKoMPv53JyOC:APA91bFTc8B8orxqrdsEDagmCHbrNDPyD27
+ 59     if err != nil {
+ 60         log.Println("cannot setup message firebase:", err)
+ 61     }

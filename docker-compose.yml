@@ -37,6 +37,8 @@ services:
       - "5551:5432"
     networks:
       - backend-net
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U main -d mydatabase" ]
       interval: 10s
@@ -118,3 +120,7 @@ networks:
         driver: bridge
         external: true 
     
+
+volumes:
+  postgres_data:
+    driver: local
