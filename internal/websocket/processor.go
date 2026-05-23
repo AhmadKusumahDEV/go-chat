@@ -88,7 +88,6 @@ func (mp *MessageProcessorImpl) worker(id int) {
 	}
 }
 
-// processMessage handles individual messages
 func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 	var broadcastMsg BroadcastMessage
 	err := json.Unmarshal(msg.Message, &broadcastMsg)
@@ -125,10 +124,9 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 			return
 		}
 
-		broadcastMsg.SenderID = msg.UserID
 		mp.hub.BroadcastToRoomExcept(broadcastMsg.RoomID, broadcastMsg.Data, msg.UserID)
 
-		// Publish notification using proper struct with all fields for better FCM notification
+		// Publish notification to RabbitMQ with user IDs for FCM
 		notifEvent := queue.NotificationEvent{
 			Type:       "message_group",
 			MessageID:  savedMsg.ID,
@@ -152,7 +150,7 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 
 // validateMessage checks if the message is valid
 func (mp *MessageProcessorImpl) validateMessage(msg *BroadcastMessage) error {
-	if len(msg.Data) > 30000 { // 30KB limit
+	if len(msg.Data) > 30000 {
 		return errors.New("message payload exceeds 30KB limit")
 	}
 	return nil

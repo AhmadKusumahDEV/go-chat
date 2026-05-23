@@ -109,7 +109,6 @@ func (r *RepositoryMessageImpl) FindMessageByRoomID(ctx context.Context, roomID 
 	return messages, hasMore, nil
 }
 
-// FindMessageByRoomIDCount returns total count of messages in a room
 func (r *RepositoryMessageImpl) FindMessageByRoomIDCount(ctx context.Context, roomID string) (int, error) {
 	query := `SELECT COUNT(*) FROM messages WHERE room_id = $1`
 	var count int
@@ -127,6 +126,19 @@ func decodeCursor(cursor string) (time.Time, error) {
 		return time.Time{}, err
 	}
 	return time.Parse(time.RFC3339Nano, string(decoded))
+}
+
+func encodeCursor(t time.Time) string {
+	return base64.StdEncoding.EncodeToString([]byte(t.Format(time.RFC3339Nano)))
+}
+
+func EncodeCursor(v interface{}) string {
+	switch ts := v.(type) {
+	case time.Time:
+		return encodeCursor(ts)
+	default:
+		return ""
+	}
 }
 
 // UpdateContent updates a message's content. Only the message owner can edit (verified by SQL WHERE).

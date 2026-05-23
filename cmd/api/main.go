@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"firebase.google.com/go/v4/messaging"
 	"github.com/AhmadKusumahDEV/go-chat/internal/cahce"
 	"github.com/AhmadKusumahDEV/go-chat/internal/config"
 	"github.com/AhmadKusumahDEV/go-chat/internal/handlers"
@@ -18,7 +19,6 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"firebase.google.com/go/v4/messaging"
 )
 
 // var upgrade websocket.Upgrader = websocket.Upgrader{

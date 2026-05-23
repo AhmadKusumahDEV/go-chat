@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"log"
 
@@ -100,14 +99,6 @@ func (s *MessageServicesImpl) EditMessage(ctx context.Context, messageID string,
 }
 
 // encodeCursor encodes a timestamp to base64 for use as cursor
-func encodeCursor(timestamp interface{}) string {
-	var ts interface{} = timestamp
-	switch v := ts.(type) {
-	case []byte:
-		return base64.StdEncoding.EncodeToString(v)
-	case string:
-		return base64.StdEncoding.EncodeToString([]byte(v))
-	default:
-		return ""
-	}
+func encodeCursor(t interface{}) string {
+	return repository.EncodeCursor(t)
 }

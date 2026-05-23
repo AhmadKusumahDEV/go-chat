@@ -130,9 +130,7 @@ func (c *Client) WritePump() {
 func (c *Client) SendMessage(message []byte) {
 	select {
 	case c.Send <- message:
-		// Message sent
 	default:
-		// Client is slow, close connection
 		c.Close()
 		c.Hub.Unregister(c)
 	}
