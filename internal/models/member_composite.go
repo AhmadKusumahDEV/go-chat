@@ -7,10 +7,10 @@ import (
 )
 
 type MemberComposite struct {
-	Username string `db:"username"`
-	Role     string `db:"role"`
-	UserID   string `db:"user_id"`
-	Avatar   string `db:"avatar_url"`
+	Username string  `db:"username"`
+	Role     string  `db:"role"`
+	UserID   string  `db:"user_id"`
+	Avatar   *string `db:"avatar_url"`
 }
 
 type MemberDetail struct {
