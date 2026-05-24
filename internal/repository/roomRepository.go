@@ -109,6 +109,8 @@ func (p *RepositoryRoomImpl) FindMemberRoom(ctx context.Context, roomID string) 
 		if err := rows.Scan(
 			&member.Username,
 			&member.Role,
+			&member.UserID,
+			&member.Avatar,
 		); err != nil {
 			return nil, err
 		}

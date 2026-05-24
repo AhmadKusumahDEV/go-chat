@@ -112,6 +112,8 @@ func MemberResponse(member *models.MemberComposite) *response.MemberResponse {
 	return &response.MemberResponse{
 		UserName: member.Username,
 		Role:     member.Role,
+		UserID:   member.UserID,
+		Avatar:   member.Avatar,
 	}
 }
 
