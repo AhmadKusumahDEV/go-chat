@@ -90,7 +90,7 @@ func (p *RepositoryRoomImpl) FindMemberRoom(ctx context.Context, roomID string) 
 		where room_id = $1
 		)
 
-		SELECT u.username , rf.role
+		SELECT u.username , rf.role , rf.user_id , u.avatar_url
 		from room_filter rf
 		join users u ON rf.user_id = u.id
 	`

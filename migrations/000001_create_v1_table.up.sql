@@ -141,7 +141,7 @@ INSERT INTO users (id, username, email, password_hash, avatar_url, provider_name
     'john_doe',
     'john@example.com',
     '$2a$10$N9qo8uLOickgx2ZMRZoMye2M5tLfI0gLRmP0W0r0kX0X0X0X0X0X0',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=john',
+    'https://api.dicebear.com/7.x/avataaars/png?seed=john',
     NULL,
     NULL
 ),
@@ -150,7 +150,7 @@ INSERT INTO users (id, username, email, password_hash, avatar_url, provider_name
     'jane_smith',
     'jane@example.com',
     '$2a$10$N9qo8uLOickgx2ZMRZoMye2M5tLfI0gLRmP0W0r0kX0X0X0X0X0X0',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=jane',
+    'https://api.dicebear.com/7.x/avataaars/png?seed=jane',
     NULL,
     NULL
 ),
@@ -159,7 +159,7 @@ INSERT INTO users (id, username, email, password_hash, avatar_url, provider_name
     'bob_wilson',
     'bob@example.com',
     '$2a$10$N9qo8uLOickgx2ZMRZoMye2M5tLfI0gLRmP0W0r0kX0X0X0X0X0X0',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=bob',
+    'https://api.dicebear.com/7.x/avataaars/png?seed=bob',
     NULL,
     NULL
 ),
@@ -168,7 +168,7 @@ INSERT INTO users (id, username, email, password_hash, avatar_url, provider_name
     'alice_johnson',
     'alice@example.com',
     '$2a$10$N9qo8uLOickgx2ZMRZoMye2M5tLfI0gLRmP0W0r0kX0X0X0X0X0X0',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=alice',
+    'https://api.dicebear.com/7.x/avataaars/png?seed=alice',
     NULL,
     NULL
 ),
@@ -177,7 +177,7 @@ INSERT INTO users (id, username, email, password_hash, avatar_url, provider_name
     'charlie_brown',
     'charlie@example.com',
     '$2a$10$N9qo8uLOickgx2ZMRZoMye2M5tLfI0gLRmP0W0r0kX0X0X0X0X0X0',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=charlie',
+    'https://api.dicebear.com/7.x/avataaars/png?seed=charlie',
     NULL,
     NULL
 );

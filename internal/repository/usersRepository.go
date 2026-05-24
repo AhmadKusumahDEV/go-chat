@@ -106,6 +106,8 @@ func (r *RepositoryUserImpl) FindByIDs(ctx context.Context, userIDs []string) ([
 	return users, nil
 }
 
+func (r *RepositoryUserImpl) Logout(ctx context.Context, userID string) error { return nil }
+
 func NewUserRepository(db *sql.DB) RepositoryUser {
 	return &RepositoryUserImpl{
 		RepositoryBased: NewBaseRepository[*models.Users](db).(*BaseRepository[*models.Users]),
