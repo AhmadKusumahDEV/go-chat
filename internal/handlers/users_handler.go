@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
@@ -27,7 +26,10 @@ type UserHandlerImpl struct {
 func (u *UserHandlerImpl) HandlerGetAllUser(c *gin.Context) {
 	users, err := u.services.GetAllUser(c.Request.Context())
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -43,14 +45,20 @@ func (u *UserHandlerImpl) HandlerLogin(c *gin.Context) {
 	userPayload := new(request.LoginRequest)
 
 	if err := c.ShouldBindJSON(userPayload); err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+		})
 		return
 	}
 
 	resp, err := u.services.LoginUser(c.Request.Context(), userPayload)
 
 	if err != nil {
-		c.AbortWithError(http.StatusUnauthorized, err)
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -62,14 +70,20 @@ func (u *UserHandlerImpl) HandlerLogin(c *gin.Context) {
 func (u *UserHandlerImpl) HandlerRefresh(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		c.AbortWithError(http.StatusBadRequest, errors.New("authorization header is required"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "authorization header is required",
+		})
 		return
 	}
 
 	resp, err := u.services.RefreshUser(c.Request.Context(), authHeader)
 
 	if err != nil {
-		c.AbortWithError(http.StatusUnauthorized, err)
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -82,14 +96,20 @@ func (u *UserHandlerImpl) HandlerRegister(c *gin.Context) {
 	userRegister := new(request.RegisterRequest)
 
 	if err := c.ShouldBindJSON(userRegister); err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+		})
 		return
 	}
 
 	err := u.services.RegisterUser(c.Request.Context(), userRegister)
 
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -100,27 +120,39 @@ func (u *UserHandlerImpl) HandlerRegister(c *gin.Context) {
 func (u *UserHandlerImpl) HandlerFcmToken(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.AbortWithError(http.StatusUnauthorized, errors.New("Unauthorized: user_id not found in context"))
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found in context",
+		})
 		return
 	}
 
 	id, err := uuid.FromString(userID.(string))
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("id tidak valid"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "id tidak valid",
+		})
 		return
 	}
 
 	fcmToken := new(request.FcmRequest)
 
 	if err := c.ShouldBindJSON(fcmToken); err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+		})
 		return
 	}
 
 	err = u.services.StoreFirebaseToken(c.Request.Context(), fcmToken, id)
 
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 

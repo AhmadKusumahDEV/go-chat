@@ -44,7 +44,6 @@ CREATE TABLE rooms (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. Tabel penghubung antara users dan rooms
 CREATE TABLE room_members (
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -54,7 +53,6 @@ CREATE TABLE room_members (
     PRIMARY KEY (room_id, user_id)
 );
 
--- 4. Tabel untuk menyimpan semua pesan
 CREATE TABLE messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,

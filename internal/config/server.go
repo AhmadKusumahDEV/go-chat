@@ -125,6 +125,9 @@ func (s *Server) setupMiddlewares() {
 		}))
 	}
 
+	// Error handler middleware (must be BEFORE gzip to handle errors properly)
+	s.Engine.Use(s.errorHandlerMiddleware())
+
 	// Gzip compression middleware
 	if s.Config.EnableGzip {
 		s.Engine.Use(gzip.Gzip(gzip.DefaultCompression))
@@ -339,6 +342,23 @@ func (s *Server) recoveryHandler(c *gin.Context, err interface{}) {
 		"error":      "internal server error",
 		"request_id": requestID,
 	})
+}
+
+// errorHandlerMiddleware handles Gin context errors and returns JSON response
+func (s *Server) errorHandlerMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+
+		if len(c.Errors) > 0 && c.Writer.Status() == http.StatusOK {
+			err := c.Errors.Last()
+
+			c.Header("Content-Type", "application/json")
+
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Err.Error(),
+			})
+		}
+	}
 }
 
 // ===================================

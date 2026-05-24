@@ -34,7 +34,10 @@ func (h *HandlerMemberImpl) HandleAddMember(c *gin.Context) {
 	err := c.ShouldBindJSON(&member)
 
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("format JSON tidak valid"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "format JSON tidak valid",
+		})
 		return
 	}
 
@@ -48,10 +51,16 @@ func (h *HandlerMemberImpl) HandleAddMember(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			c.AbortWithError(http.StatusGatewayTimeout, errors.New("Request Timeout"))
+			c.JSON(http.StatusGatewayTimeout, response.ApiResponse{
+				Status:  http.StatusGatewayTimeout,
+				Message: "Request Timeout",
+			})
 			return
 		}
-		c.AbortWithError(http.StatusInternalServerError, errors.New("Error internal server: "+err.Error()))
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -69,7 +78,10 @@ func (h *HandlerMemberImpl) HandleGetMembers(c *gin.Context) {
 	_, err := uuid.FromString(roomID)
 
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("id tidak valid"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "id tidak valid",
+		})
 		return
 	}
 
@@ -77,10 +89,16 @@ func (h *HandlerMemberImpl) HandleGetMembers(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			c.AbortWithError(http.StatusGatewayTimeout, errors.New("Request Timeout"))
+			c.JSON(http.StatusGatewayTimeout, response.ApiResponse{
+				Status:  http.StatusGatewayTimeout,
+				Message: "Request Timeout",
+			})
 			return
 		}
-		c.AbortWithError(http.StatusInternalServerError, errors.New("Error internal server"))
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -97,19 +115,28 @@ func (h *HandlerMemberImpl) HandleLeaveRoom(c *gin.Context) {
 
 	_, err := uuid.FromString(roomID)
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("invalid room ID format"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid room ID format",
+		})
 		return
 	}
 
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.AbortWithError(http.StatusUnauthorized, errors.New("Unauthorized: user_id not found"))
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
 		return
 	}
 
 	err = h.srv.LeaveRoom(c.Request.Context(), roomID, userID.(string))
 	if err != nil {
-		c.AbortWithError(http.StatusForbidden, err)
+		c.JSON(http.StatusForbidden, response.ApiResponse{
+			Status:  http.StatusForbidden,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -126,7 +153,10 @@ func (h *HandlerMemberImpl) HandleRemoveMember(c *gin.Context) {
 
 	_, err := uuid.FromString(roomID)
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("invalid room ID format"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid room ID format",
+		})
 		return
 	}
 
@@ -134,19 +164,28 @@ func (h *HandlerMemberImpl) HandleRemoveMember(c *gin.Context) {
 		TargetUserID string `json:"target_user_id" binding:"required,uuid"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("target_user_id is required"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "target_user_id is required",
+		})
 		return
 	}
 
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.AbortWithError(http.StatusUnauthorized, errors.New("Unauthorized: user_id not found"))
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
 		return
 	}
 
 	err = h.srv.RemoveMember(c.Request.Context(), roomID, body.TargetUserID, userID.(string))
 	if err != nil {
-		c.AbortWithError(http.StatusForbidden, err)
+		c.JSON(http.StatusForbidden, response.ApiResponse{
+			Status:  http.StatusForbidden,
+			Message: err.Error(),
+		})
 		return
 	}
 

@@ -32,23 +32,35 @@ func (r *HandlerRoomImpl) HandlerDeleteRoom(c *gin.Context) {
 
 	_, err := uuid.FromString(roomID)
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("id tidak valid"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "id tidak valid",
+		})
 		return
 	}
 
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.AbortWithError(http.StatusUnauthorized, errors.New("Unauthorized: user_id not found"))
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
 		return
 	}
 
 	err = r.srv.DeleteRoom(c.Request.Context(), roomID, userID.(string))
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			c.AbortWithError(http.StatusGatewayTimeout, errors.New("Request Timeout"))
+			c.JSON(http.StatusGatewayTimeout, response.ApiResponse{
+				Status:  http.StatusGatewayTimeout,
+				Message: "Request Timeout",
+			})
 			return
 		}
-		c.AbortWithError(http.StatusForbidden, err)
+		c.JSON(http.StatusForbidden, response.ApiResponse{
+			Status:  http.StatusForbidden,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -63,7 +75,10 @@ func (r *HandlerRoomImpl) HandlerDeleteRoom(c *gin.Context) {
 func (r *HandlerRoomImpl) HandlerUpdatedRoom(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.AbortWithError(http.StatusUnauthorized, errors.New("Unauthorized: user_id not found"))
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
 		return
 	}
 
@@ -72,23 +87,35 @@ func (r *HandlerRoomImpl) HandlerUpdatedRoom(c *gin.Context) {
 	var req request.UpdateRoomRequest
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("format JSON tidak valid"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "format JSON tidak valid",
+		})
 		return
 	}
 
 	_, err = uuid.FromString(userID.(string))
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("id tidak valid"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "id tidak valid",
+		})
 		return
 	}
 
 	err = r.srv.UpdateRoom(c.Request.Context(), roomID, userID.(string), &req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			c.AbortWithError(http.StatusGatewayTimeout, errors.New("Request Timeout"))
+			c.JSON(http.StatusGatewayTimeout, response.ApiResponse{
+				Status:  http.StatusGatewayTimeout,
+				Message: "Request Timeout",
+			})
 			return
 		}
-		c.AbortWithError(http.StatusForbidden, err)
+		c.JSON(http.StatusForbidden, response.ApiResponse{
+			Status:  http.StatusForbidden,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -103,7 +130,10 @@ func (r *HandlerRoomImpl) HandlerUpdatedRoom(c *gin.Context) {
 func (r *HandlerRoomImpl) HandleCreateRoom(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.AbortWithError(http.StatusUnauthorized, errors.New("Unauthorized: user_id not found in context"))
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found in context",
+		})
 		return
 	}
 
@@ -111,14 +141,20 @@ func (r *HandlerRoomImpl) HandleCreateRoom(c *gin.Context) {
 	err := c.ShouldBind(&room)
 
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+		})
 		return
 	}
 
 	err = r.srv.CreateRoom(c.Request.Context(), &room, userID.(string))
 
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -136,14 +172,20 @@ func (r *HandlerRoomImpl) HandleGetRoomByName(c *gin.Context) {
 	err := c.ShouldBind(&name)
 
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+		})
 		return
 	}
 
 	rooms, err := r.srv.GetRoomByName(c.Request.Context(), name)
 
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -161,7 +203,10 @@ func (r *HandlerRoomImpl) HandleGetAllRoom(c *gin.Context) {
 	rooms, err := r.srv.GetAllRoomUser(c.Request.Context())
 
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -178,18 +223,27 @@ func (r *HandlerRoomImpl) HandleGetAllRoom(c *gin.Context) {
 func (r *HandlerRoomImpl) HandleGetRoomByUserID(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.AbortWithError(http.StatusUnauthorized, errors.New("Unauthorized: user_id not found"))
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
 		return
 	}
 
 	if _, err := uuid.FromString(userID.(string)); err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("Invalid room ID format"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid room ID format",
+		})
 		return
 	}
 
 	room, err := r.srv.GetRoomByUserID(c.Request.Context(), userID.(string))
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
@@ -212,14 +266,20 @@ func (r *HandlerRoomImpl) HandleGetRoomDetail(c *gin.Context) {
 
 	// Validate room ID format
 	if _, err := uuid.FromString(roomID); err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("invalid room ID format"))
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid room ID format",
+		})
 		return
 	}
 
 	// Get user ID from JWT middleware
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.AbortWithError(http.StatusUnauthorized, errors.New("unauthorized: user_id not found"))
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "unauthorized: user_id not found",
+		})
 		return
 	}
 
@@ -227,10 +287,16 @@ func (r *HandlerRoomImpl) HandleGetRoomDetail(c *gin.Context) {
 	roomDetail, err := r.srv.GetRoomDetail(c.Request.Context(), roomID, userID.(string))
 	if err != nil {
 		if err.Error() == "forbidden: you are not a member of this room" {
-			c.AbortWithError(http.StatusForbidden, err)
+			c.JSON(http.StatusForbidden, response.ApiResponse{
+				Status:  http.StatusForbidden,
+				Message: err.Error(),
+			})
 			return
 		}
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 

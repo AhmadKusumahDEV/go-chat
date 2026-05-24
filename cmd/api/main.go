@@ -11,7 +11,6 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/cahce"
 	"github.com/AhmadKusumahDEV/go-chat/internal/config"
 	"github.com/AhmadKusumahDEV/go-chat/internal/handlers"
-	"github.com/AhmadKusumahDEV/go-chat/internal/middelware"
 	"github.com/AhmadKusumahDEV/go-chat/internal/queue"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
 	"github.com/AhmadKusumahDEV/go-chat/internal/router"
@@ -149,8 +148,6 @@ func main() {
 	}
 
 	server := config.NewServer(&cfg.Server, &config.Dependencies{RedisClient: rds, JwtConfig: cfg.Jwt})
-
-	server.Engine.Use(middelware.GinContextErrorHandler())
 
 	server.Engine.GET("/", func(c *gin.Context) {
 		c.JSON(200, struct {
