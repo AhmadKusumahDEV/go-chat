@@ -117,7 +117,7 @@ func main() {
 	usersServices := services.NewUsersServices(usersRepository, firebaseRepository, cfg.Jwt)
 	oauthServices := services.NewOauthServices(cfg, newClientRedis, oauthStatesRepository, usersRepository)
 	messageServices := services.NewMessageServices(messageRepository, memberRepository)
-	memberServices := services.NewMemberServices(roomRepository, memberRepository, newClientRedis, validate)
+	memberServices := services.NewMemberServices(roomRepository, memberRepository, usersRepository, messageRepository, newClientRedis, validate)
 
 	// 4. Initialize WebSocket Manager
 	manager := websocket.NewWebSocketManager(messageServices, publisher)

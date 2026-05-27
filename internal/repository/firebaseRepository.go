@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
+	"github.com/lib/pq"
 )
 
 type RepositoryFirebase interface {
@@ -15,7 +17,9 @@ type RepositoryFirebase interface {
 	CreateFcmToken(ctx context.Context, firebase *models.Firebase) error
 	GetTokensByUserIDs(ctx context.Context, userIDs []string) ([]string, error)
 	DeactivateToken(ctx context.Context, fcmToken string) error
-	DeactivateTokensByUserIDs(ctx context.Context, userIDs []string, validTokens []string) (deactivatedCount int, err error)
+	DeactivateTokenByUserID(ctx context.Context, userID string, fcmToken string) (int, error)
+	DeactivateTokens(ctx context.Context, tokens []string) (int, error)
+	DeactivateAllTokensByUserID(ctx context.Context, userID string) (int, error)
 }
 
 type RepositoryFirebaseImpl struct {
@@ -159,57 +163,64 @@ func (r *RepositoryFirebaseImpl) DeactivateToken(ctx context.Context, fcmToken s
 	return nil
 }
 
-func (r *RepositoryFirebaseImpl) DeactivateTokensByUserIDs(ctx context.Context, userIDs []string, validTokens []string) (int, error) {
-	if len(userIDs) == 0 {
+func (r *RepositoryFirebaseImpl) DeactivateTokenByUserID(ctx context.Context, userID string, fcmToken string) (int, error) {
+	query := `
+        UPDATE user_devices
+        SET
+            is_active = FALSE,
+            logged_out_at = NOW(),
+            updated_at = NOW()
+        WHERE fcm_token = $1
+        AND user_id = $2
+		AND is_active = TRUE
+	`
+	result, err := r.db.ExecContext(ctx, query, userID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, errors.New("deactivate token got error: " + err.Error())
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	return int(rowsAffected), nil
+}
+
+func (r *RepositoryFirebaseImpl) DeactivateTokens(ctx context.Context, tokens []string) (int, error) {
+	if len(tokens) == 0 {
 		return 0, nil
 	}
 
-	// If no valid tokens, deactivate ALL tokens for these users
-	if len(validTokens) == 0 {
-		query := `UPDATE user_devices SET is_active = FALSE, updated_at = NOW() WHERE user_id IN (`
-		args := make([]interface{}, len(userIDs))
-		for i, id := range userIDs {
-			if i > 0 {
-				query += ", "
-			}
-			query += "$" + strconv.Itoa(i+1)
-			args[i] = id
-		}
-		query += ")"
+	query := `
+        UPDATE user_devices
+        SET
+            is_active = FALSE,
+            updated_at = NOW()
+        WHERE fcm_token = ANY($1)
+        AND is_active = TRUE
+    `
 
-		result, err := r.db.ExecContext(ctx, query, args...)
-		if err != nil {
-			return 0, err
-		}
-
-		rowsAffected, _ := result.RowsAffected()
-		return int(rowsAffected), nil
-	}
-
-	// Build query to deactivate tokens NOT in validTokens list
-	query := `UPDATE user_devices SET is_active = FALSE, updated_at = NOW() WHERE user_id IN (`
-	args := make([]interface{}, 0, len(userIDs)+len(validTokens))
-
-	for i, id := range userIDs {
-		if i > 0 {
-			query += ", "
-		}
-		query += "$" + strconv.Itoa(i+1)
-		args = append(args, id)
-	}
-	query += ") AND fcm_token NOT IN ("
-	for i, token := range validTokens {
-		if i > 0 {
-			query += ", "
-		}
-		query += "$" + strconv.Itoa(len(userIDs)+i+1)
-		args = append(args, token)
-	}
-	query += ")"
-
-	result, err := r.db.ExecContext(ctx, query, args...)
+	result, err := r.db.ExecContext(ctx, query, pq.Array(tokens))
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("deactivate tokens: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	return int(rowsAffected), nil
+}
+
+// DeactivateAllTokensByUserID deactivates ALL FCM tokens for a specific user (used on logout)
+func (r *RepositoryFirebaseImpl) DeactivateAllTokensByUserID(ctx context.Context, userID string) (int, error) {
+	query := `
+        UPDATE user_devices
+        SET
+            is_active = FALSE,
+            logged_out_at = NOW(),
+            updated_at = NOW()
+        WHERE user_id = $1
+        AND is_active = TRUE
+    `
+
+	result, err := r.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return 0, fmt.Errorf("deactivate all tokens by user ID: %w", err)
 	}
 
 	rowsAffected, _ := result.RowsAffected()

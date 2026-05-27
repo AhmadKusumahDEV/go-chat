@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -24,18 +25,29 @@ type MemberService interface {
 }
 
 type MemberServiceImpl struct {
-	roomRepository   repository.RepositoryRoom
-	memberRepository repository.RepositoryMembers
-	cahce            cahce.CahceRedis
-	validate         *validator.Validate
+	roomRepository    repository.RepositoryRoom
+	memberRepository  repository.RepositoryMembers
+	userRepository    repository.RepositoryUser
+	messageRepository repository.MessageRepository
+	cahce             cahce.CahceRedis
+	validate          *validator.Validate
 }
 
-func NewMemberServices(roomRepository repository.RepositoryRoom, memberRepository repository.RepositoryMembers, cahce cahce.CahceRedis, validate *validator.Validate) MemberService {
+func NewMemberServices(
+	roomRepository repository.RepositoryRoom,
+	memberRepository repository.RepositoryMembers,
+	userRepository repository.RepositoryUser,
+	messageRepository repository.MessageRepository,
+	cahce cahce.CahceRedis,
+	validate *validator.Validate,
+) MemberService {
 	return &MemberServiceImpl{
-		roomRepository:   roomRepository,
-		memberRepository: memberRepository,
-		cahce:            cahce,
-		validate:         validate,
+		roomRepository:    roomRepository,
+		memberRepository:  memberRepository,
+		userRepository:    userRepository,
+		messageRepository: messageRepository,
+		cahce:             cahce,
+		validate:          validate,
 	}
 }
 
@@ -47,7 +59,6 @@ func (m *MemberServiceImpl) AddMember(ctx context.Context, member request.AddMem
 		return err
 	}
 
-	// Check if room is private — only admin can add members
 	room, err := m.roomRepository.FindByID(ctx, member.RoomID)
 	if err != nil {
 		return errors.New("room not found")
@@ -88,9 +99,26 @@ func (m *MemberServiceImpl) AddMember(ctx context.Context, member request.AddMem
 		return errors.New("no valid members to add")
 	}
 
+	// Get names for system message
+	addedByName, err := m.getUserName(ctx, member.AddMemberBy)
+	if err != nil {
+		addedByName = "Someone"
+	}
+
+	memberNames, err := m.getMemberNames(ctx, member.Members)
+	if err != nil {
+		memberNames = fmt.Sprintf("%d member(s)", len(member.Members))
+	}
+
 	err = m.memberRepository.CreateBatch(ctx, members)
 	if err != nil {
 		return err
+	}
+
+	content := fmt.Sprintf("%s added %s to the room", addedByName, memberNames)
+	err = m.messageRepository.CreateSystemMessage(ctx, room.ID.String(), content)
+	if err != nil {
+		log.Printf("warning: failed to create system message for add member: %v", err)
 	}
 
 	go func() {
@@ -103,6 +131,42 @@ func (m *MemberServiceImpl) AddMember(ctx context.Context, member request.AddMem
 	}()
 
 	return nil
+}
+
+func (m *MemberServiceImpl) getUserName(ctx context.Context, userID string) (string, error) {
+	user, err := m.userRepository.FindByID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	return user.Username, nil
+}
+
+func (m *MemberServiceImpl) getMemberNames(ctx context.Context, memberIDs []string) (string, error) {
+	if len(memberIDs) == 0 {
+		return "", nil
+	}
+
+	users, err := m.userRepository.FindByIDs(ctx, memberIDs)
+	if err != nil {
+		return "", err
+	}
+
+	if len(users) == 0 {
+		return "", nil
+	}
+
+	switch len(users) {
+	case 1:
+		return users[0].Username, nil
+	case 2:
+		return users[0].Username + " and " + users[1].Username, nil
+	default:
+		names := make([]string, 0, len(users))
+		for _, u := range users {
+			names = append(names, u.Username)
+		}
+		return users[0].Username + " and " + fmt.Sprintf("%d others", len(users)-1), nil
+	}
 }
 
 // GetMembers implements MemberService.

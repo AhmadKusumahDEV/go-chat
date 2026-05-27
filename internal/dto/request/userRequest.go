@@ -26,3 +26,8 @@ type FcmRequest struct {
 	FcmToken     string `json:"fcm_token" binding:"required"`
 	Installation string `json:"installation_id" binding:"required"`
 }
+
+// LogoutRequest for logging out from a specific device or all devices
+type LogoutRequest struct {
+	FcmToken string `json:"fcm_token" binding:"required"`
+}

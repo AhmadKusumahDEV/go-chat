@@ -16,6 +16,7 @@ type MessageRepository interface {
 	FindMessageByRoomID(ctx context.Context, roomID string, limit int, cursor *string) ([]*models.Message, bool, error)
 	FindMessageByRoomIDCount(ctx context.Context, roomID string) (int, error)
 	UpdateContent(ctx context.Context, messageID string, userID string, newContent string) error
+	CreateSystemMessage(ctx context.Context, roomID string, content string) error
 }
 
 type RepositoryMessageImpl struct {
@@ -155,6 +156,13 @@ func (r *RepositoryMessageImpl) UpdateContent(ctx context.Context, messageID str
 	}
 
 	return nil
+}
+
+// CreateSystemMessage creates a system message in a room (no user_id)
+func (r *RepositoryMessageImpl) CreateSystemMessage(ctx context.Context, roomID string, content string) error {
+	query := `INSERT INTO messages (room_id, content, message_type, timestamp) VALUES ($1, $2, $3, NOW())`
+	_, err := r.db.ExecContext(ctx, query, roomID, content, "system")
+	return err
 }
 
 var _ MessageRepository = (*RepositoryMessageImpl)(nil)

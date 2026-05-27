@@ -24,9 +24,12 @@ var (
 
 	retryableErrorCodes = []string{
 		"INTERNAL",       // Internal server error
-		"UNAVAILABLE",    // Server unavailable
+		"UNAVAILABLE",    // Server unavailable - device offline
 		"QUOTA_EXCEEDED", // Quota exceeded - should wait
 	}
+
+	// maxRetryAttempts  = 3
+	// retryDelaySeconds = 30
 )
 
 type NotificationWorker struct {
@@ -35,8 +38,8 @@ type NotificationWorker struct {
 	userRepo     repository.RepositoryUser
 	messageRepo  repository.MessageRepository
 	firebaseRepo repository.RepositoryFirebase
-	memberRepo  repository.RepositoryMembers
-	roomRepo    repository.RepositoryRoom
+	memberRepo   repository.RepositoryMembers
+	roomRepo     repository.RepositoryRoom
 }
 
 func NewNotificationWorker(
@@ -54,8 +57,8 @@ func NewNotificationWorker(
 		userRepo:     userRepo,
 		messageRepo:  messageRepo,
 		firebaseRepo: firebaseRepo,
-		memberRepo:  memberRepo,
-		roomRepo:    roomRepo,
+		memberRepo:   memberRepo,
+		roomRepo:     roomRepo,
 	}
 }
 
@@ -284,8 +287,12 @@ func (w *NotificationWorker) processNotification(msg *amqp091.Delivery) {
 				if isInvalidTokenError(errCode) {
 					invalidTokens = append(invalidTokens, token)
 					log.Printf("   🔴 PERMANENT ERROR (%s) - Token will be deactivated in DB", errCode)
+				} else if isRetryableError(errCode) {
+					invalidTokens = append(invalidTokens, token)
+					log.Printf("   🟠 RETRYABLE ERROR (%s) - Token will be deactivated",
+						errCode)
 				} else {
-					log.Printf("   🟡 TRANSIENT ERROR (%s) - Will keep token active for retry", errCode)
+					log.Printf("   🟠 UNKNOWN ERROR (%s) - No action taken", errCode)
 				}
 			}
 		}
@@ -297,15 +304,63 @@ func (w *NotificationWorker) processNotification(msg *amqp091.Delivery) {
 	if len(invalidTokens) > 0 {
 		log.Printf("🔍 Deactivating %d invalid FCM token(s) in database...", len(invalidTokens))
 
-		deactivatedCount, err := w.firebaseRepo.DeactivateTokensByUserIDs(ctx, targetIDs, tokens)
+		deactivatedCount, err := w.firebaseRepo.DeactivateTokens(ctx, invalidTokens)
 		if err != nil {
 			log.Printf("❌ FAILED to deactivate invalid tokens: %v", err)
-			log.Printf("   ⚠️  Warning: Invalid tokens remain active in database")
 		} else {
-			log.Printf("✅ SUCCESS | Deactivated %d invalid token(s)", deactivatedCount)
-			log.Printf("   🔴 Tokens removed: %v", maskTokens(invalidTokens))
+			log.Printf("✅ Deactivated %d invalid tokens", deactivatedCount)
 		}
 	}
+
+	// if len(retryableTokens) > 0 {
+	// 	log.Printf("🔄 Scheduling %d notification(s) for retry...", len(retryableTokens))
+
+	// 	for _, r := range retryableTokens {
+	// 		if r.retryCount >= maxRetryAttempts {
+	// 			log.Printf("   ⚠️  Max retries reached for token %s - deactivating", maskSingleToken(r.token))
+	// 			invalidTokens = append(invalidTokens, r.token)
+	// 			continue
+	// 		}
+
+	// 		retryEvent := queue.NotificationEvent{
+	// 			Type:       event.Type,
+	// 			MessageID:  event.MessageID,
+	// 			RoomID:     event.RoomID,
+	// 			SenderID:   event.SenderID,
+	// 			SenderName: event.SenderName,
+	// 			Title:      event.Title,
+	// 			Body:       event.Body,
+	// 		}
+
+	// 		body, _ := json.Marshal(retryEvent)
+	// 		headers := amqp091.Table{
+	// 			"x-retry-count":     r.retryCount + 1,
+	// 			"x-retry-token":     r.token,
+	// 			"x-original-msg-id": msg.MessageId,
+	// 		}
+
+	// 		err := w.rabbitmq.PublishWithContext(
+	// 			ctx,
+	// 			"chat.notifications",
+	// 			"notification.retry",
+	// 			false,
+	// 			false,
+	// 			amqp091.Publishing{
+	// 				ContentType:  "application/json",
+	// 				Body:         body,
+	// 				DeliveryMode: amqp091.Persistent,
+	// 				Headers:      headers,
+	// 				Expiration:   fmt.Sprintf("%d", retryDelaySeconds*1000), // TTL in ms
+	// 			},
+	// 		)
+	// 		if err != nil {
+	// 			log.Printf("   ❌ Failed to schedule retry for token %s: %v", maskSingleToken(r.token), err)
+	// 		} else {
+	// 			log.Printf("   ✅ Retry scheduled for token %s (attempt %d/%d, delay %ds)",
+	// 				maskSingleToken(r.token), r.retryCount+1, maxRetryAttempts, retryDelaySeconds)
+	// 		}
+	// 	}
+	// }
 
 	// Summary
 	duration := time.Since(startTime)
@@ -336,17 +391,31 @@ func maskSingleToken(token string) string {
 	return fmt.Sprintf("%s...%s", token[:6], token[len(token)-6:])
 }
 
-// getErrorCode extracts the error code from Firebase Messaging error
+// getErrorCode extracts and normalizes the error code from Firebase Messaging error
 func getErrorCode(err error) string {
 	if err == nil {
 		return ""
 	}
 	errStr := err.Error()
 	parts := strings.SplitN(errStr, ":", 2)
-	if len(parts) > 0 {
-		return strings.TrimSpace(parts[0])
+	code := strings.TrimSpace(parts[0])
+
+	// Normalize to uppercase with underscores to match Firebase error code conventions
+	normalized := strings.ToUpper(code)
+	normalized = strings.ReplaceAll(normalized, " ", "_")
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+
+	// Map common Firebase error messages to canonical codes
+	switch normalized {
+	case "REQUESTED_ENTITY_WAS_NOT_FOUND":
+		return "UNREGISTERED"
+	case "SENDERID_MISMATCH":
+		return "SENDER_ID_MISMATCH"
+	case "INVALID_ARGUMENT", "APP_INSTANCE_WAS_UNREGISTERED":
+		return "UNREGISTERED"
+	default:
+		return normalized
 	}
-	return errStr
 }
 
 // isInvalidTokenError checks if error code indicates token is permanently invalid
@@ -359,7 +428,6 @@ func isInvalidTokenError(errCode string) bool {
 	return false
 }
 
-// isRetryableError checks if error code indicates transient failure (should retry)
 func isRetryableError(errCode string) bool {
 	for _, code := range retryableErrorCodes {
 		if code == errCode {

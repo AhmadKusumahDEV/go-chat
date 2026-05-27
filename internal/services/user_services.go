@@ -21,6 +21,7 @@ type UsersServices interface {
 	RefreshUser(ctx context.Context, refreshToken string) (*response.JwtReponse, error)
 	GetAllUser(ctx context.Context) ([]*response.UserResponse, error)
 	StoreFirebaseToken(ctx context.Context, fcm *request.FcmRequest, userId uuid.UUID) error
+	LogoutUser(ctx context.Context, userId uuid.UUID, installationID string) (int, error)
 }
 
 type UsersServivesImpl struct {
@@ -171,6 +172,24 @@ func (u *UsersServivesImpl) StoreFirebaseToken(ctx context.Context, fcm *request
 	}
 
 	return nil
+}
+
+func (u *UsersServivesImpl) LogoutUser(ctx context.Context, userId uuid.UUID, fcmToken string) (int, error) {
+	var count int
+	var err error
+
+	if fcmToken != "" {
+		count, err = u.firebaseRepository.DeactivateTokenByUserID(ctx, userId.String(), fcmToken)
+		if err != nil {
+			return 0, fmt.Errorf("failed to deactivate token on logout: %w", err)
+		}
+	} else {
+		count, err = u.firebaseRepository.DeactivateAllTokensByUserID(ctx, userId.String())
+		if err != nil {
+			return 0, fmt.Errorf("failed to deactivate tokens on logout: %w", err)
+		}
+	}
+	return count, nil
 }
 
 func NewUsersServices(userRepository repository.RepositoryUser, firebase repository.RepositoryFirebase, jwtConfig config.JwtConfig) UsersServices {

@@ -16,6 +16,7 @@ type UserHandler interface {
 	HandlerRefresh(c *gin.Context)
 	HandlerGetAllUser(c *gin.Context)
 	HandlerFcmToken(c *gin.Context)
+	HandlerLogout(c *gin.Context)
 }
 
 type UserHandlerImpl struct {
@@ -157,6 +158,52 @@ func (u *UserHandlerImpl) HandlerFcmToken(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "success register user"})
+}
+
+// HandlerLogout deactivates FCM tokens for the logged-in user
+func (u *UserHandlerImpl) HandlerLogout(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found in context",
+		})
+		return
+	}
+
+	id, err := uuid.FromString(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid user id",
+		})
+		return
+	}
+
+	logoutReq := new(request.LogoutRequest)
+	if err := c.ShouldBindJSON(logoutReq); err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid request body",
+		})
+		// Allow empty body (logout from all devices)
+		// logoutReq = &request.LogoutRequest{}
+	}
+
+	count, err := u.services.LogoutUser(c.Request.Context(), id, logoutReq.InstallationID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Message: "success logout user",
+		Data:    count,
+	})
 }
 
 func NewUserHandler(srv services.UsersServices) UserHandler {
