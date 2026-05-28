@@ -292,6 +292,7 @@ func (w *NotificationWorker) processNotification(msg *amqp091.Delivery) {
 					log.Printf("   🟠 RETRYABLE ERROR (%s) - Token will be deactivated",
 						errCode)
 				} else {
+					invalidTokens = append(invalidTokens, token)
 					log.Printf("   🟠 UNKNOWN ERROR (%s) - No action taken", errCode)
 				}
 			}
