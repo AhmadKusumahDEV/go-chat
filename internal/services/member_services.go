@@ -217,6 +217,7 @@ func (m *MemberServiceImpl) LeaveRoom(ctx context.Context, roomID string, userID
 			if err != nil {
 				return errors.New("failed Leave room")
 			}
+			return nil
 		}
 
 		adminCount := 0
