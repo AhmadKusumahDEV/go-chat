@@ -212,6 +212,13 @@ func (m *MemberServiceImpl) LeaveRoom(ctx context.Context, roomID string, userID
 			return err
 		}
 
+		if len(members) <= 1 {
+			err = m.memberRepository.RemoveMember(ctx, roomID, userID)
+			if err != nil {
+				return errors.New("failed Leave room")
+			}
+		}
+
 		adminCount := 0
 		for _, mem := range members {
 			if mem.Role == "admin" {
