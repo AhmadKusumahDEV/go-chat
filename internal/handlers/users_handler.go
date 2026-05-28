@@ -190,7 +190,7 @@ func (u *UserHandlerImpl) HandlerLogout(c *gin.Context) {
 		// logoutReq = &request.LogoutRequest{}
 	}
 
-	count, err := u.services.LogoutUser(c.Request.Context(), id, logoutReq.InstallationID)
+	count, err := u.services.LogoutUser(c.Request.Context(), id, logoutReq.FcmToken)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ApiResponse{
 			Status:  http.StatusInternalServerError,
