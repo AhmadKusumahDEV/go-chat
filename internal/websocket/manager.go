@@ -21,6 +21,8 @@ type WebSocketManager interface {
 	SendNotificationToUser(userID string, notification []byte) error
 	SendNotificationToAll(notification []byte)
 	GetConnectedUsers() []string
+	BroadcastToRoom(roomID string, message []byte)
+	BroadcastToRoomExcept(roomID string, message []byte, exceptUserID string)
 }
 
 // WebSocketManagerImpl implements WebSocketManager interface
@@ -189,4 +191,12 @@ func (m *WebSocketManagerImpl) SendNotificationToAll(notification []byte) {
 
 func (m *WebSocketManagerImpl) GetConnectedUsers() []string {
 	return m.hub.GetAllConnectedUsers()
+}
+
+func (m *WebSocketManagerImpl) BroadcastToRoom(roomID string, message []byte) {
+	m.hub.BroadcastToRoom(roomID, message)
+}
+
+func (m *WebSocketManagerImpl) BroadcastToRoomExcept(roomID string, message []byte, exceptUserID string) {
+	m.hub.BroadcastToRoomExcept(roomID, message, exceptUserID)
 }

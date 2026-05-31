@@ -237,7 +237,7 @@ func (o *OauthServicesImpl) findOrCreateGitHubUser(ctx context.Context, userInfo
 
 	user, err := o.userRepo.FindByProviderID(ctx, "github", oauthID)
 	if err == nil {
-		user.AvatarUrl = &userInfo.AvatarURL
+		user.AvatarUrl = sql.NullString{String: userInfo.AvatarURL, Valid: true}
 		if user.Username == "" {
 			user.Username = userInfo.Login
 		}
@@ -256,15 +256,14 @@ func (o *OauthServicesImpl) findOrCreateGitHubUser(ctx context.Context, userInfo
 
 	existingUser, errEmail := o.userRepo.FindByEmail(ctx, userInfo.Email)
 	if errEmail == nil {
-		if existingUser.ProviderName != nil && *existingUser.ProviderName != "" {
+		if existingUser.ProviderName.Valid && existingUser.ProviderName.String != "" {
 			return nil, fmt.Errorf("email %s is already registered with %s. Please login with %s instead.",
-				userInfo.Email, *existingUser.ProviderName, *existingUser.ProviderName)
+				userInfo.Email, existingUser.ProviderName.String, existingUser.ProviderName.String)
 		}
 
-		providerName := "github"
-		existingUser.ProviderName = &providerName
-		existingUser.ProviderID = &oauthID
-		existingUser.AvatarUrl = &userInfo.AvatarURL
+		existingUser.ProviderName = sql.NullString{String: "github", Valid: true}
+		existingUser.ProviderID = sql.NullString{String: oauthID, Valid: true}
+		existingUser.AvatarUrl = sql.NullString{String: userInfo.AvatarURL, Valid: true}
 		if existingUser.Username == "" {
 			existingUser.Username = userInfo.Login
 		}
@@ -281,9 +280,9 @@ func (o *OauthServicesImpl) findOrCreateGitHubUser(ctx context.Context, userInfo
 	newUser := &models.Users{
 		Username:     userInfo.Login,
 		Email:        userInfo.Email,
-		ProviderName: strPtr("github"),
-		ProviderID:   &oauthID,
-		AvatarUrl:    &userInfo.AvatarURL,
+		ProviderName: sql.NullString{String: "github", Valid: true},
+		ProviderID:   sql.NullString{String: oauthID, Valid: true},
+		AvatarUrl:    sql.NullString{String: userInfo.AvatarURL, Valid: true},
 	}
 
 	if err := o.userRepo.Create(ctx, newUser); err != nil {
@@ -446,7 +445,7 @@ func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo
 
 	user, err := o.userRepo.FindByProviderID(ctx, "google", oauthID)
 	if err == nil {
-		user.AvatarUrl = &userInfo.AvatarURL
+		user.AvatarUrl = sql.NullString{String: userInfo.AvatarURL, Valid: true}
 		if user.Username == "" {
 			user.Username = userInfo.Name
 		}
@@ -465,15 +464,14 @@ func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo
 
 	existingUser, errEmail := o.userRepo.FindByEmail(ctx, userInfo.Email)
 	if errEmail == nil {
-		if existingUser.ProviderName != nil && *existingUser.ProviderName != "" {
+		if existingUser.ProviderName.Valid && existingUser.ProviderName.String != "" {
 			return nil, fmt.Errorf("email %s is already registered with %s. Please login with %s instead.",
-				userInfo.Email, *existingUser.ProviderName, *existingUser.ProviderName)
+				userInfo.Email, existingUser.ProviderName.String, existingUser.ProviderName.String)
 		}
 
-		providerName := "google"
-		existingUser.ProviderName = &providerName
-		existingUser.ProviderID = &oauthID
-		existingUser.AvatarUrl = &userInfo.AvatarURL
+		existingUser.ProviderName = sql.NullString{String: "google", Valid: true}
+		existingUser.ProviderID = sql.NullString{String: oauthID, Valid: true}
+		existingUser.AvatarUrl = sql.NullString{String: userInfo.AvatarURL, Valid: true}
 		if existingUser.Username == "" {
 			existingUser.Username = userInfo.Name
 		}
@@ -489,9 +487,9 @@ func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo
 	newUser := &models.Users{
 		Username:     userInfo.Name,
 		Email:        userInfo.Email,
-		ProviderName: strPtr("google"),
-		ProviderID:   &oauthID,
-		AvatarUrl:    &userInfo.AvatarURL,
+		ProviderName: sql.NullString{String: "google", Valid: true},
+		ProviderID:   sql.NullString{String: oauthID, Valid: true},
+		AvatarUrl:    sql.NullString{String: userInfo.AvatarURL, Valid: true},
 	}
 
 	if err := o.userRepo.Create(ctx, newUser); err != nil {

@@ -22,7 +22,7 @@ type RepositoryUserImpl struct {
 
 // FindByEmail implements RepositoryUser.
 func (r *RepositoryUserImpl) FindByEmail(ctx context.Context, email string) (models.Users, error) {
-	query := `SELECT id, username, email, password_hash, created_at, avatar_url, provider_name, provider_id
+	query := `SELECT id, username, email, password_hash, avatar_url, about, created_at, provider_name, provider_id
 			  FROM users WHERE email = $1`
 	var users models.Users
 
@@ -33,8 +33,9 @@ func (r *RepositoryUserImpl) FindByEmail(ctx context.Context, email string) (mod
 		&users.Username,
 		&users.Email,
 		&users.Password,
-		&users.CreatedAt,
 		&users.AvatarUrl,
+		&users.About,
+		&users.CreatedAt,
 		&users.ProviderName,
 		&users.ProviderID,
 	)
@@ -47,7 +48,7 @@ func (r *RepositoryUserImpl) FindByEmail(ctx context.Context, email string) (mod
 
 // FindByProviderID implements RepositoryUser.
 func (r *RepositoryUserImpl) FindByProviderID(ctx context.Context, providerName string, providerID string) (*models.Users, error) {
-	query := `SELECT id, username, email, password_hash, created_at, avatar_url, provider_name, provider_id 
+	query := `SELECT id, username, email, password_hash, avatar_url, about, created_at, provider_name, provider_id
 			  FROM users WHERE provider_name = $1 AND provider_id = $2`
 	var user models.Users
 
@@ -56,8 +57,9 @@ func (r *RepositoryUserImpl) FindByProviderID(ctx context.Context, providerName 
 		&user.Username,
 		&user.Email,
 		&user.Password,
-		&user.CreatedAt,
 		&user.AvatarUrl,
+		&user.About,
+		&user.CreatedAt,
 		&user.ProviderName,
 		&user.ProviderID,
 	)
@@ -76,7 +78,7 @@ func (r *RepositoryUserImpl) FindByIDs(ctx context.Context, userIDs []string) ([
 	}
 
 	// Build query with placeholder
-	query := `SELECT id, username, email, password_hash, created_at, avatar_url, provider_name, provider_id FROM users WHERE id = ANY($1)`
+	query := `SELECT id, username, email, password_hash, avatar_url, about, created_at, provider_name, provider_id FROM users WHERE id = ANY($1)`
 	rows, err := r.db.QueryContext(ctx, query, userIDs)
 	if err != nil {
 		return nil, err
@@ -91,8 +93,9 @@ func (r *RepositoryUserImpl) FindByIDs(ctx context.Context, userIDs []string) ([
 			&user.Username,
 			&user.Email,
 			&user.Password,
-			&user.CreatedAt,
 			&user.AvatarUrl,
+			&user.About,
+			&user.CreatedAt,
 			&user.ProviderName,
 			&user.ProviderID,
 		); err != nil {

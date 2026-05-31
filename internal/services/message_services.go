@@ -9,6 +9,7 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
+	"github.com/AhmadKusumahDEV/go-chat/internal/websocket"
 )
 
 type MessageService interface {
@@ -18,8 +19,9 @@ type MessageService interface {
 }
 
 type MessageServicesImpl struct {
-	messageRepo repository.MessageRepository
-	memberRepo  repository.RepositoryMembers
+	messageRepo   repository.MessageRepository
+	memberRepo    repository.RepositoryMembers
+	managerSocket websocket.WebSocketManager
 }
 
 func NewMessageServices(messageRepo repository.MessageRepository, memberRepo repository.RepositoryMembers) MessageService {

@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/url"
@@ -50,10 +51,9 @@ func ExtractFields(entity any) ([]FieldInfo, error) {
 		// Get db tag
 		dbTag := field.Tag.Get("db")
 		if dbTag == "" || dbTag == "-" {
-			continue // Skip fields without db tag
+			continue
 		}
 
-		// Parse tag: "id,pk,auto" or "name" or "created_at,auto"
 		parts := strings.Split(dbTag, ",")
 		dbColumn := parts[0]
 
@@ -95,12 +95,24 @@ func ScanRow[T models.Entity](scanner scanning, fields []FieldInfo) (T, error) {
 	var scanDest []any
 	for _, field := range fields {
 		fieldValue := entityValue.Elem().FieldByName(field.Name)
-		if fieldValue.IsValid() && fieldValue.CanAddr() {
+		if !fieldValue.IsValid() || !fieldValue.CanAddr() {
+			continue
+		}
+
+		if fieldValue.Kind() == reflect.Ptr {
+			if fieldValue.IsNil() {
+				fieldValue = reflect.New(fieldValue.Type().Elem())
+			}
+			scanDest = append(scanDest, fieldValue.Interface())
+		} else {
 			scanDest = append(scanDest, fieldValue.Addr().Interface())
 		}
 	}
 
-	// Scan
+	if len(scanDest) == 0 {
+		return zero, errors.New("no fields to scan")
+	}
+
 	if err := scanner.Scan(scanDest...); err != nil {
 		return zero, err
 	}
@@ -147,7 +159,6 @@ func RoomResponse(room *models.Room) *response.RoomResponse {
 		CreatedAt:   room.CreatedAt,
 	}
 
-	// ✅ Convert last message jika ada
 	if room.LastMessage != nil {
 		var userID *string
 		if room.LastMessage.SenderID != nil {
@@ -174,13 +185,22 @@ func UserResponses(user []*models.Users) []*response.UserResponse {
 	}
 	return rooms
 }
+
+func nullStringToPtr(ns sql.NullString) *string {
+	if ns.Valid {
+		return &ns.String
+	}
+	return nil
+}
+
 func UserResponse(user *models.Users) *response.UserResponse {
 	return &response.UserResponse{
 		ID:        user.ID.String(),
 		Username:  user.Username,
 		Email:     user.Email,
+		About:     nullStringToPtr(user.About),
 		CreatedAt: user.CreatedAt,
-		AvatarUrl: user.AvatarUrl,
+		AvatarUrl: nullStringToPtr(user.AvatarUrl),
 	}
 }
 

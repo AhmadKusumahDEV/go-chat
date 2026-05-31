@@ -20,8 +20,11 @@ type UsersServices interface {
 	RegisterUser(ctx context.Context, req *request.RegisterRequest) error
 	RefreshUser(ctx context.Context, refreshToken string) (*response.JwtReponse, error)
 	GetAllUser(ctx context.Context) ([]*response.UserResponse, error)
+	GetDetailUser(ctx context.Context, userId uuid.UUID) (*response.UserResponse, error)
+	GetUserByID(ctx context.Context, userId uuid.UUID) (*response.UserResponse, error)
 	StoreFirebaseToken(ctx context.Context, fcm *request.FcmRequest, userId uuid.UUID) error
 	LogoutUser(ctx context.Context, userId uuid.UUID, installationID string) (int, error)
+	UpdatedUserInfo(ctx context.Context, userId uuid.UUID, req *request.UpdateProfileRequest) error
 }
 
 type UsersServivesImpl struct {
@@ -121,9 +124,9 @@ func (u *UsersServivesImpl) RegisterUser(ctx context.Context, req *request.Regis
 	existingUser, err := u.userRepository.FindByEmail(ctx, req.Email)
 	if err == nil {
 		// Email exists! Check if user has OAuth provider linked
-		if existingUser.ProviderName != nil && *existingUser.ProviderName != "" {
+		if existingUser.ProviderName.Valid && existingUser.ProviderName.String != "" {
 			return fmt.Errorf("email %s is already registered with %s. Please use %s login or use a different email.",
-				req.Email, *existingUser.ProviderName, *existingUser.ProviderName)
+				req.Email, existingUser.ProviderName.String, existingUser.ProviderName.String)
 		}
 		// User exists but no provider - this is a duplicate registration
 		return fmt.Errorf("email %s is already registered. Please login instead.", req.Email)
@@ -158,6 +161,24 @@ func (u *UsersServivesImpl) GetAllUser(ctx context.Context) ([]*response.UserRes
 	return userConvert, nil
 }
 
+func (u *UsersServivesImpl) GetDetailUser(ctx context.Context, userId uuid.UUID) (*response.UserResponse, error) {
+	user, err := u.userRepository.FindByID(ctx, userId)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	return helpers.UserResponse(user), nil
+}
+
+func (u *UsersServivesImpl) GetUserByID(ctx context.Context, userId uuid.UUID) (*response.UserResponse, error) {
+	user, err := u.userRepository.FindByID(ctx, userId)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	return helpers.UserResponse(user), nil
+}
+
 func (u *UsersServivesImpl) StoreFirebaseToken(ctx context.Context, fcm *request.FcmRequest, userId uuid.UUID) error {
 	dtoToModels := models.Firebase{
 		UserID:         userId,
@@ -190,6 +211,29 @@ func (u *UsersServivesImpl) LogoutUser(ctx context.Context, userId uuid.UUID, fc
 		}
 	}
 	return count, nil
+}
+
+func (u *UsersServivesImpl) UpdatedUserInfo(ctx context.Context, userId uuid.UUID, req *request.UpdateProfileRequest) error {
+	userinfo, err := u.userRepository.FindByID(ctx, userId)
+	if err != nil {
+		return errors.New("user not found")
+	}
+
+	if req.Username != "" {
+		userinfo.Username = req.Username
+	}
+
+	if req.About != "" {
+		userinfo.About.String = req.About
+		userinfo.About.Valid = true
+	}
+
+	err = u.userRepository.Update(ctx, userinfo)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	return nil
 }
 
 func NewUsersServices(userRepository repository.RepositoryUser, firebase repository.RepositoryFirebase, jwtConfig config.JwtConfig) UsersServices {

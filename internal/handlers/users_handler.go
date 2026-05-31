@@ -15,8 +15,11 @@ type UserHandler interface {
 	HandlerLogin(c *gin.Context)
 	HandlerRefresh(c *gin.Context)
 	HandlerGetAllUser(c *gin.Context)
+	HandlerGetDetailUser(c *gin.Context)
+	HandlerGetUserByID(c *gin.Context)
 	HandlerFcmToken(c *gin.Context)
 	HandlerLogout(c *gin.Context)
+	HandlerUpdateUser(c *gin.Context)
 }
 
 type UserHandlerImpl struct {
@@ -41,6 +44,123 @@ func (u *UserHandlerImpl) HandlerGetAllUser(c *gin.Context) {
 	})
 }
 
+// HandlerGetDetailUser implements [UserHandler].
+func (u *UserHandlerImpl) HandlerGetDetailUser(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found in context",
+		})
+		return
+	}
+
+	id, err := uuid.FromString(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid user id",
+		})
+		return
+	}
+
+	user, err := u.services.GetDetailUser(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Data:    user,
+		Message: "success get detail user",
+	})
+}
+
+// HandlerGetUserByID implements [UserHandler] - get other user's profile by ID
+func (u *UserHandlerImpl) HandlerGetUserByID(c *gin.Context) {
+	userID := c.Param("id")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "user id is required",
+		})
+		return
+	}
+
+	id, err := uuid.FromString(userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid user id",
+		})
+		return
+	}
+
+	user, err := u.services.GetUserByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, response.ApiResponse{
+			Status:  http.StatusNotFound,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Data:    user,
+		Message: "success get user",
+	})
+}
+
+func (u *UserHandlerImpl) HandlerUpdateUser(c *gin.Context) {
+	userPayload := new(request.UpdateProfileRequest)
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
+		return
+	}
+
+	id, err := uuid.FromString(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid user id",
+		})
+		return
+	}
+
+	err = c.ShouldBindJSON(userPayload)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "data yang di kirim tidak valid",
+		})
+		return
+	}
+
+	err = u.services.UpdatedUserInfo(c.Request.Context(), id, userPayload)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Message: "success update user",
+	})
+}
+
 // HandlerLogin implements UserHandler.
 func (u *UserHandlerImpl) HandlerLogin(c *gin.Context) {
 	userPayload := new(request.LoginRequest)
@@ -48,7 +168,7 @@ func (u *UserHandlerImpl) HandlerLogin(c *gin.Context) {
 	if err := c.ShouldBindJSON(userPayload); err != nil {
 		c.JSON(http.StatusBadRequest, response.ApiResponse{
 			Status:  http.StatusBadRequest,
-			Message: "json tidak memnuhi validation rules",
+			Message: "data tidak valid",
 		})
 		return
 	}

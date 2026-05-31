@@ -11,16 +11,9 @@ type UserResponse struct {
 	ID        string    `json:"id"`
 	Username  string    `json:"username"`
 	Email     string    `json:"email"`
+	About     *string   `json:"about"`
 	CreatedAt time.Time `json:"created_at"`
-	AvatarUrl *string    `json:"avatar_url"`
-}
-
-// LoginResponse menyertakan Token (JWT)
-type LoginResponse struct {
-	AccessToken string       `json:"access_token"`
-	TokenType   string       `json:"token_type"` // Biasanya "Bearer"
-	ExpiresIn   int          `json:"expires_in"` // Detik
-	User        UserResponse `json:"user"`
+	AvatarUrl *string   `json:"avatar_url"`
 }
 
 type JwtReponse struct {

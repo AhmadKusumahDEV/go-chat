@@ -119,7 +119,6 @@ func main() {
 	messageServices := services.NewMessageServices(messageRepository, memberRepository)
 	memberServices := services.NewMemberServices(roomRepository, memberRepository, usersRepository, messageRepository, newClientRedis, validate)
 
-	// 4. Initialize WebSocket Manager
 	manager := websocket.NewWebSocketManager(messageServices, publisher)
 	manager.Start()
 	wsHandler := handlers.NewWebsocketHandler(manager)
@@ -133,6 +132,7 @@ func main() {
 	oauthHandler := handlers.NewHandlerOauth(oauthServices)
 	messageHandler := handlers.NewMessageHandler(messageServices)
 	memberHandler := handlers.NewMemberHandler(memberServices)
+	testPushHandler := handlers.NewTestPushNotificationHandler(fcmClient, firebaseRepository, roomRepository)
 
 	// router
 	roomRouter := router.NewRoomRouter(roomHandler)
@@ -140,7 +140,6 @@ func main() {
 	authRouter := router.NewAuthRouter(oauthHandler)
 	messageRouter := router.NewMessageRouter(messageHandler)
 	memberRouter := router.NewMemberRouter(memberHandler)
-	testPushHandler := handlers.NewTestPushNotificationHandler(fcmClient, firebaseRepository, roomRepository)
 	testPushRouter := handlers.NewTestPushRouter(testPushHandler)
 
 	if err != nil {

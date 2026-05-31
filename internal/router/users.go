@@ -16,6 +16,9 @@ func (r *UsersRoutes) RegisterRoutes(router *gin.Engine, srv *config.Server) {
 	usersgroup := router.Group("/api/users")
 
 	usersgroup.GET("/", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerGetAllUser)
+	usersgroup.GET("/me", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerGetDetailUser)
+	usersgroup.GET("/:id", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerGetUserByID)
+	usersgroup.PATCH("/updated", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerUpdateUser)
 	usersgroup.GET("/refresh", r.handle.HandlerRefresh)
 
 	usersgroup.POST("/register", r.handle.HandlerRegister)
