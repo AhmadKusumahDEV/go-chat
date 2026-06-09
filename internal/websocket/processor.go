@@ -17,6 +17,7 @@ import (
 // services.MessageService satisfies this interface.
 type MessageSender interface {
 	SendMessage(ctx context.Context, req *request.CreateMessageRequest, senderID string) (*response.MessageResponse, error)
+	GetMessageByID(ctx context.Context, messageID string) (*response.MessageResponse, error)
 }
 
 type WebsocketProcessor interface {
@@ -26,6 +27,7 @@ type WebsocketProcessor interface {
 	processMessage(msg *ProcessMessage)
 	validateMessage(msg *BroadcastMessage) error
 	worker(id int)
+	GetMessageID(ctx context.Context, messageID string) (*response.MessageResponse, error)
 }
 
 // MessageProcessorImpl implements MessageProcessor interface
@@ -37,6 +39,10 @@ type MessageProcessorImpl struct {
 	publisher      queue.Publisher
 	shutdown       chan struct{}
 	wg             sync.WaitGroup
+}
+
+func (mp *MessageProcessorImpl) GetMessageID(ctx context.Context, messageID string) (*response.MessageResponse, error) {
+	return mp.messageService.GetMessageByID(ctx, messageID)
 }
 
 type ProcessMessage struct {
@@ -92,7 +98,7 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 	var broadcastMsg BroadcastMessage
 	err := json.Unmarshal(msg.Message, &broadcastMsg)
 	if err != nil {
-		errorRes, _ := json.Marshal(map[string]string{"type": "error", "message": "Invalid JSON format payload"})
+		errorRes, _ := json.Marshal(map[string]string{"message_type": "error", "message": "Invalid JSON format payload"})
 		msg.Client.SendMessage(errorRes)
 		return
 	}
@@ -101,7 +107,7 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 	err = mp.validateMessage(&broadcastMsg)
 	if err != nil {
 		log.Println(err)
-		errorRes, _ := json.Marshal(map[string]string{"type": "error", "message": err.Error()})
+		errorRes, _ := json.Marshal(map[string]string{"message_type": "error", "message": err.Error()})
 		msg.Client.SendMessage(errorRes)
 		return
 	}

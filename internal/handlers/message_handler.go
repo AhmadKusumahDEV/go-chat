@@ -1,30 +1,47 @@
 package handlers
 
 import (
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"time"
 
+	"github.com/AhmadKusumahDEV/go-chat/internal/config"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
 	"github.com/AhmadKusumahDEV/go-chat/internal/services"
+	"github.com/AhmadKusumahDEV/go-chat/internal/worker"
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 type HandlerMessage interface {
 	HandleGetRoomMessages(c *gin.Context)
 	HandleSendMessage(c *gin.Context)
 	HandleEditMessage(c *gin.Context)
+	UploadMultipleImages(c *gin.Context)
 }
 
 type HandlerMessageImpl struct {
-	srv services.MessageService
+	srv        services.MessageService
+	dispatcher *worker.Dispatcher
+	cfg        config.Cfg
+	redis      *redis.Client
 }
 
-func NewMessageHandler(srv services.MessageService) HandlerMessage {
-	return &HandlerMessageImpl{srv: srv}
+func NewMessageHandler(srv services.MessageService, dispatcher *worker.Dispatcher, cfg config.Cfg, rds *redis.Client) HandlerMessage {
+	return &HandlerMessageImpl{
+		srv:        srv,
+		dispatcher: dispatcher,
+		cfg:        cfg,
+		redis:      rds,
+	}
 }
 
 // HandleGetRoomMessages returns paginated messages for a room.
@@ -182,5 +199,132 @@ func (h *HandlerMessageImpl) HandleEditMessage(c *gin.Context) {
 		Status:  http.StatusOK,
 		Message: "message updated",
 		Data:    nil,
+	})
+}
+
+func (h *HandlerMessageImpl) UploadMultipleImages(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
+		return
+	}
+
+	var (
+		roomID  = c.PostForm("room_id")
+		content = c.PostForm("content")
+	)
+
+	tempDir := h.cfg.PathTemp
+	if tempDir == "" {
+		tempDir = os.TempDir()
+	} else {
+		tempDir = filepath.Clean(tempDir)
+	}
+
+	if roomID == "" {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "room_id are required",
+		})
+		return
+	}
+
+	messageID, err := uuid.NewV6()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: "failed to generate message ID",
+		})
+		return
+	}
+
+	form, err := c.MultipartForm()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "data yang di kirim tidak valid",
+		})
+		return
+	}
+
+	files := form.File["images"]
+
+	batchID := fmt.Sprintf("%s_%d", userID, time.Now().UnixNano())
+
+	redisKey := "batch:status:" + batchID
+	h.redis.HSet(ctx, redisKey, map[string]any{
+		"total":     len(files),
+		"remaining": len(files),
+		"failed":    0,
+	})
+
+	h.redis.Expire(ctx, redisKey, 1*time.Hour)
+
+	_, err = h.srv.SendMessage(ctx, &request.CreateMessageRequest{
+		RoomID:    roomID,
+		MessageID: messageID.String(),
+		Type:      "image",
+		Content:   content,
+		SenderID:  userID.(string),
+	}, userID.(string))
+	if err != nil {
+		log.Printf("[ERR] Gagal create message untuk upload: %v", err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to create message: " + err.Error(),
+		})
+		return
+	}
+
+	for _, fileHeader := range files {
+
+		src, err := fileHeader.Open()
+		if err != nil {
+			log.Printf("[ERR] Gagal membuka file: %v", err)
+			continue
+		}
+
+		tempFile, err := os.CreateTemp(tempDir, "chat-upload-*.tmp")
+		if err != nil {
+			log.Printf("[ERR] Gagal membuat file temporary: %v", err)
+			src.Close()
+			continue
+		}
+
+		_, err = io.Copy(tempFile, src)
+		src.Close()
+		tempFile.Close()
+		if err != nil {
+			os.Remove(tempFile.Name())
+			continue
+		}
+
+		log.Printf("chats/%s/%s_%s", userID, batchID, fileHeader.Filename)
+
+		job := worker.UploadJob{
+			UserID:         userID.(string),
+			RoomID:         roomID,
+			BatchID:        batchID,
+			MessageID:      messageID.String(),
+			MessageType:    "image",
+			MessageContent: content,
+			BucketName:     "chat-app",
+			ObjectName:     fmt.Sprintf("chats/%s/%s_%s", userID, batchID, fileHeader.Filename),
+			TempFilePath:   tempFile.Name(),
+			ContentType:    fileHeader.Header.Get("Content-Type"),
+			FileName:       fileHeader.Filename,
+		}
+
+		h.dispatcher.EnqueueJob(job)
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"status":  "accepted",
+		"message": "Files are being processed please wait for a message",
 	})
 }

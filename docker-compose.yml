@@ -23,6 +23,9 @@ services:
   #     - DATABASE_URL=postgres://main:example@postgres_db:5432/mydatabase?sslmode=disable
   #     - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
   #     - REDIS_ADDR=redis:6379
+  #     - PATH_TEMP=/app/temp
+  #   volumes:
+  #     - ./temp:/app/temp
   #   networks:
   #     - backend-net
 
@@ -88,11 +91,10 @@ services:
       timeout: 5s
       retries: 5
 
-  # Background Job Worker (staging only — use k8s in production)
   job_worker:
     build:
       context: .
-      dockerfile: cmd/job/Dockerfile
+      dockerfile: cmd/worker_notifiaction/Dockerfile
     container_name: job_worker
     restart: unless-stopped
     depends_on:

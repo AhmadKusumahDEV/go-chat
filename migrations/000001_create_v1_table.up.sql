@@ -59,8 +59,7 @@ CREATE TABLE messages (
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     content TEXT NOT NULL,
     message_type message_type_enum DEFAULT 'text',
-    reply_to UUID REFERENCES messages(id), -- untuk threaded replies
-    attachments JSONB, -- menyimpan metadata file
+    reply_to UUID REFERENCES messages(id),
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

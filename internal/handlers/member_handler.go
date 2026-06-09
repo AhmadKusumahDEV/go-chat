@@ -86,7 +86,6 @@ func (h *HandlerMemberImpl) HandleGetMembers(c *gin.Context) {
 	}
 
 	members, err := h.srv.GetMembers(c.Request.Context(), roomID)
-
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			c.JSON(http.StatusGatewayTimeout, response.ApiResponse{

@@ -3,36 +3,41 @@ package services
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"log"
+	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
-	"github.com/AhmadKusumahDEV/go-chat/internal/websocket"
+	"github.com/AhmadKusumahDEV/go-chat/pkg/storage"
 )
 
 type MessageService interface {
 	GetRoomMessages(ctx context.Context, roomID string, userID string, limit int, cursor *string) (*response.MessageListResponse, error)
+	GetMessageByID(ctx context.Context, messageID string) (*response.MessageResponse, error)
 	SendMessage(ctx context.Context, req *request.CreateMessageRequest, senderID string) (*response.MessageResponse, error)
 	EditMessage(ctx context.Context, messageID string, userID string, req *request.UpdateMessageRequest) error
 }
 
 type MessageServicesImpl struct {
-	messageRepo   repository.MessageRepository
-	memberRepo    repository.RepositoryMembers
-	managerSocket websocket.WebSocketManager
+	messageRepo repository.MessageRepository
+	memberRepo  repository.RepositoryMembers
+	client      storage.ObjectStorage
 }
 
-func NewMessageServices(messageRepo repository.MessageRepository, memberRepo repository.RepositoryMembers) MessageService {
+func NewMessageServices(messageRepo repository.MessageRepository, memberRepo repository.RepositoryMembers, client storage.ObjectStorage) MessageService {
 	return &MessageServicesImpl{
 		messageRepo: messageRepo,
 		memberRepo:  memberRepo,
+		client:      client,
 	}
 }
 
 // GetRoomMessages returns paginated messages for a room with cursor-based pagination.
 func (s *MessageServicesImpl) GetRoomMessages(ctx context.Context, roomID string, userID string, limit int, cursor *string) (*response.MessageListResponse, error) {
+	var targetTime time.Time
 	_, err := s.memberRepo.FindMember(ctx, roomID, userID)
 	if err != nil {
 		return nil, errors.New("forbidden: you are not a member of this room")
@@ -42,13 +47,38 @@ func (s *MessageServicesImpl) GetRoomMessages(ctx context.Context, roomID string
 		limit = 20
 	}
 
-	messages, hasMore, err := s.messageRepo.FindMessageByRoomID(ctx, roomID, limit, cursor)
+	if cursor != nil && *cursor != "" {
+		targetTime, err = decodeCursor(*cursor)
+		if err != nil {
+			return nil, errors.New("invalid cursor format")
+		}
+	} else {
+		targetTime = time.Now().UTC()
+	}
+
+	timeStr := targetTime.Format(time.RFC3339Nano)
+
+	messages, hasMore, err := s.messageRepo.FindMessageByRoomID(ctx, roomID, limit, timeStr)
 	if err != nil {
 		log.Println("error on services layer GetRoomMessages", err)
 		return nil, err
 	}
 
 	messageResponses := response.NewMessageResponses(messages)
+
+	for _, msg := range messageResponses {
+		if len(msg.Attachments) > 0 {
+			for i := range msg.Attachments {
+				objectname := msg.Attachments[i]
+				url, err := s.client.GetObjectBySignedURL(ctx, "chat-app", objectname, time.Hour*24)
+				if err != nil {
+					log.Println("error on services layer GetRoomMessages", err)
+					return nil, err
+				}
+				msg.Attachments[i] = url
+			}
+		}
+	}
 
 	var nextCursor *string
 	if hasMore && len(messages) > 0 {
@@ -100,7 +130,36 @@ func (s *MessageServicesImpl) EditMessage(ctx context.Context, messageID string,
 	return nil
 }
 
-// encodeCursor encodes a timestamp to base64 for use as cursor
-func encodeCursor(t interface{}) string {
-	return repository.EncodeCursor(t)
+// decodeCursor decodes a base64 cursor string to timestamp
+func decodeCursor(cursor string) (time.Time, error) {
+	decoded, err := base64.StdEncoding.DecodeString(cursor)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Parse(time.RFC3339Nano, string(decoded))
+}
+
+func encodeCursor(t time.Time) string {
+	return base64.StdEncoding.EncodeToString([]byte(t.Format(time.RFC3339Nano)))
+}
+
+func (s *MessageServicesImpl) GetMessageByID(ctx context.Context, messageID string) (*response.MessageResponse, error) {
+	message, err := s.messageRepo.FindOneMessageByRoomID(ctx, messageID)
+	if err != nil {
+		return nil, errors.New("gagal mengambil message by id")
+	}
+
+	dtoMessage := response.NewMessageResponse(message)
+
+	for i := range dtoMessage.Attachments {
+		objectname := dtoMessage.Attachments[i]
+		url, err := s.client.GetObjectBySignedURL(ctx, "chat-app", objectname, time.Hour*24)
+		if err != nil {
+			log.Println("error on services layer GetRoomMessages", err)
+			return nil, err
+		}
+		dtoMessage.Attachments[i] = url
+	}
+
+	return dtoMessage, nil
 }

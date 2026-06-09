@@ -19,6 +19,7 @@ func (r *MessageRoutes) RegisterRoutes(router *gin.Engine, srv *config.Server) {
 	msgGroup.GET("/:room_id", r.handle.HandleGetRoomMessages)
 	msgGroup.POST("/", r.handle.HandleSendMessage)
 	msgGroup.PUT("/:id", r.handle.HandleEditMessage)
+	msgGroup.POST("/upload", r.handle.UploadMultipleImages)
 }
 
 func NewMessageRouter(handler handlers.HandlerMessage) config.RouteRegistrar {

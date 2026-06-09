@@ -211,6 +211,7 @@ func (h *Hub) BroadcastToUser(userID string, message []byte) error {
 		if client.UserID == userID {
 			select {
 			case client.Send <- message:
+				log.Println("sent notifiaction to client with id " + userID)
 				return nil
 			case <-time.After(5 * time.Second):
 				return errors.New("timeout sending notification to user")

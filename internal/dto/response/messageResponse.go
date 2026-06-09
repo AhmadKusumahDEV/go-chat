@@ -8,25 +8,25 @@ import (
 )
 
 type MessageResponse struct {
-	ID          string              `json:"id"`
-	RoomID      string              `json:"room_id"`
-	SenderID    string              `json:"sender_id,omitempty"`
-	SenderName  string              `json:"sender_name,omitempty"`
-	Content     string              `json:"content"`
-	MessageType string              `json:"message_type"`
-	ReplyTo     string              `json:"reply_to,omitempty"`
-	Attachments []models.Attachment `json:"attachments,omitempty"`
-	Timestamp   time.Time           `json:"timestamp"`
+	ID          string    `json:"id"`
+	RoomID      string    `json:"room_id"`
+	SenderID    string    `json:"sender_id,omitempty"`
+	SenderName  string    `json:"sender_name,omitempty"`
+	Content     string    `json:"content"`
+	MessageType string    `json:"message_type"`
+	ReplyTo     string    `json:"reply_to,omitempty"`
+	Timestamp   time.Time `json:"timestamp"`
+	Attachments []string  `json:"attachments,omitempty"`
 }
 
 func NewMessageResponse(msg *models.Message) *MessageResponse {
 	resp := &MessageResponse{
 		ID:          msg.ID.String(),
 		RoomID:      msg.RoomID.String(),
-		Content:     msg.Content,
 		MessageType: msg.Type,
-		Attachments: msg.Attachments,
 		Timestamp:   msg.Timestamp,
+		Content:     msg.Content,
+		Attachments: msg.Attachments,
 	}
 
 	if msg.SenderName != "" {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
+	"github.com/gofrs/uuid"
 )
 
 type FieldInfo struct {
@@ -27,8 +28,6 @@ type scanning interface {
 
 func ExtractFields(entity any) ([]FieldInfo, error) {
 	val := reflect.ValueOf(entity)
-
-	// Get actual struct (handle pointer)
 	if val.Kind() == reflect.Ptr {
 		if val.IsNil() {
 			val = reflect.New(val.Type().Elem()).Elem()
@@ -48,7 +47,6 @@ func ExtractFields(entity any) ([]FieldInfo, error) {
 		field := typ.Field(i)
 		fieldValue := val.Field(i)
 
-		// Get db tag
 		dbTag := field.Tag.Get("db")
 		if dbTag == "" || dbTag == "-" {
 			continue
@@ -65,7 +63,6 @@ func ExtractFields(entity any) ([]FieldInfo, error) {
 			IsAuto:   false,
 		}
 
-		// Check for pk and auto flags
 		for _, part := range parts[1:] {
 			switch part {
 			case "pk":
@@ -74,6 +71,12 @@ func ExtractFields(entity any) ([]FieldInfo, error) {
 				info.IsAuto = true
 			}
 		}
+
+		// if info.IsPK && info.IsAuto {
+		// 	if info.Value == nil || IsEmptyValue(info.Value) {
+		// 		continue
+		// 	}
+		// }
 
 		fields = append(fields, info)
 	}
@@ -118,6 +121,26 @@ func ScanRow[T models.Entity](scanner scanning, fields []FieldInfo) (T, error) {
 	}
 
 	return entityValue.Interface().(T), nil
+}
+
+func IsEmptyValue(v any) bool {
+	if v == nil {
+		return true
+	}
+
+	switch val := v.(type) {
+	case string:
+		return val == ""
+	case uuid.UUID:
+		return val == uuid.Nil
+	default:
+		// For pointer types, check if nil
+		rv := reflect.ValueOf(v)
+		if rv.Kind() == reflect.Ptr {
+			return rv.IsNil()
+		}
+		return false
+	}
 }
 
 func MemberResponse(member *models.MemberComposite) *response.MemberResponse {

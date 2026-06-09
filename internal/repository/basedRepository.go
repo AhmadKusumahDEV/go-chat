@@ -53,7 +53,6 @@ func (r *BaseRepository[T]) Create(ctx context.Context, entity T) error {
 		return err
 	}
 
-	// 3. Build INSERT query dynamically
 	var columns []string
 	var placeholders []string
 	var values []any
@@ -64,7 +63,11 @@ func (r *BaseRepository[T]) Create(ctx context.Context, entity T) error {
 		if field.IsPK {
 			columns = append(columns, field.DBColumn)
 			placeholders = append(placeholders, fmt.Sprintf("$%d", placeholderIndex))
-			values = append(values, v6)
+			if field.Value != nil && !helpers.IsEmptyValue(field.Value) {
+				values = append(values, field.Value)
+			} else {
+				values = append(values, v6)
+			}
 			placeholderIndex++
 			continue
 		}

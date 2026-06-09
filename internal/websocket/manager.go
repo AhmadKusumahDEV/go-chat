@@ -1,11 +1,13 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"sync"
 	"time"
 
+	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
 	"github.com/AhmadKusumahDEV/go-chat/internal/queue"
 	"github.com/gorilla/websocket"
 )
@@ -23,6 +25,7 @@ type WebSocketManager interface {
 	GetConnectedUsers() []string
 	BroadcastToRoom(roomID string, message []byte)
 	BroadcastToRoomExcept(roomID string, message []byte, exceptUserID string)
+	MessageByID(messageID string) (*response.MessageResponse, error)
 }
 
 // WebSocketManagerImpl implements WebSocketManager interface
@@ -199,4 +202,8 @@ func (m *WebSocketManagerImpl) BroadcastToRoom(roomID string, message []byte) {
 
 func (m *WebSocketManagerImpl) BroadcastToRoomExcept(roomID string, message []byte, exceptUserID string) {
 	m.hub.BroadcastToRoomExcept(roomID, message, exceptUserID)
+}
+
+func (m *WebSocketManagerImpl) MessageByID(messageID string) (*response.MessageResponse, error) {
+	return m.processor.GetMessageID(context.Background(), messageID)
 }

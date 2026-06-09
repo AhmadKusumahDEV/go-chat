@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 
+	"firebase.google.com/go/v4/messaging"
 	"github.com/AhmadKusumahDEV/go-chat/internal/config"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
 	"github.com/gin-gonic/gin"
-	"firebase.google.com/go/v4/messaging"
 )
 
 // TestPushNotificationHandler handles testing push notifications
@@ -19,11 +19,11 @@ type TestPushNotificationHandler struct {
 }
 
 type TestPushRequest struct {
-	UserID   string `json:"userId" binding:"required"`   // Target user ID
-	RoomID   string `json:"roomId"`                      // Optional room ID for context
-	Title    string `json:"title" binding:"required"`     // Notification title
-	Body     string `json:"body" binding:"required"`      // Notification body
-	Message  string `json:"message"`                      // Optional message content
+	UserID  string `json:"userId" binding:"required"` // Target user ID
+	RoomID  string `json:"roomId"`                    // Optional room ID for context
+	Title   string `json:"title" binding:"required"`  // Notification title
+	Body    string `json:"body" binding:"required"`   // Notification body
+	Message string `json:"message"`                   // Optional message content
 }
 
 func NewTestPushNotificationHandler(
@@ -38,8 +38,6 @@ func NewTestPushNotificationHandler(
 	}
 }
 
-// SendTestPushNotification sends a test FCM push notification to a specific user's device
-// POST /test/push-notification
 func (h *TestPushNotificationHandler) SendTestPushNotification(c *gin.Context) {
 	var req TestPushRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -49,7 +47,6 @@ func (h *TestPushNotificationHandler) SendTestPushNotification(c *gin.Context) {
 
 	ctx := context.Background()
 
-	// Step 1: Get FCM tokens for the user
 	tokens, err := h.firebaseRepo.GetTokensByUserIDs(ctx, []string{req.UserID})
 	if err != nil {
 		log.Printf("❌ Failed to get tokens for user %s: %v", req.UserID, err)
@@ -62,7 +59,6 @@ func (h *TestPushNotificationHandler) SendTestPushNotification(c *gin.Context) {
 		return
 	}
 
-	// Step 2: Get room name if roomID provided
 	roomName := "Chat"
 	if req.RoomID != "" && h.roomRepo != nil {
 		if name, err := h.roomRepo.FindRoomName(ctx, req.RoomID); err == nil {
@@ -70,7 +66,6 @@ func (h *TestPushNotificationHandler) SendTestPushNotification(c *gin.Context) {
 		}
 	}
 
-	// Step 3: Build notification data
 	notificationTitle := req.Title
 	if req.RoomID != "" {
 		notificationTitle = "[" + roomName + "] " + req.Title
@@ -81,7 +76,6 @@ func (h *TestPushNotificationHandler) SendTestPushNotification(c *gin.Context) {
 		notificationBody = notificationBody[:97] + "..."
 	}
 
-	// Step 4: Send FCM notification to first token (one device)
 	token := tokens[0]
 	message := &messaging.Message{
 		Notification: &messaging.Notification{
@@ -95,7 +89,6 @@ func (h *TestPushNotificationHandler) SendTestPushNotification(c *gin.Context) {
 		Token: token,
 	}
 
-	// Step 5: Send the notification
 	response, err := h.fcmClient.Send(ctx, message)
 	if err != nil {
 		log.Printf("❌ Failed to send FCM notification: %v", err)
@@ -118,8 +111,6 @@ func (h *TestPushNotificationHandler) SendTestPushNotification(c *gin.Context) {
 	})
 }
 
-// SendTestMulticast sends test notification to all user's devices
-// POST /test/push-notification/multicast
 func (h *TestPushNotificationHandler) SendTestMulticast(c *gin.Context) {
 	var req TestPushRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -129,7 +120,6 @@ func (h *TestPushNotificationHandler) SendTestMulticast(c *gin.Context) {
 
 	ctx := context.Background()
 
-	// Step 1: Get all FCM tokens for the user
 	tokens, err := h.firebaseRepo.GetTokensByUserIDs(ctx, []string{req.UserID})
 	if err != nil {
 		log.Printf("❌ Failed to get tokens for user %s: %v", req.UserID, err)
@@ -142,13 +132,11 @@ func (h *TestPushNotificationHandler) SendTestMulticast(c *gin.Context) {
 		return
 	}
 
-	// Step 2: Build notification
 	notificationBody := req.Body
 	if len(notificationBody) > 100 {
 		notificationBody = notificationBody[:97] + "..."
 	}
 
-	// Step 3: Send multicast to all tokens
 	message := &messaging.MulticastMessage{
 		Notification: &messaging.Notification{
 			Title: req.Title,
@@ -178,8 +166,6 @@ func (h *TestPushNotificationHandler) SendTestMulticast(c *gin.Context) {
 	})
 }
 
-// GetUserTokens returns FCM tokens for a user (for debugging)
-// GET /test/push-notification/tokens/:userId
 func (h *TestPushNotificationHandler) GetUserTokens(c *gin.Context) {
 	userID := c.Param("userId")
 	if userID == "" {
@@ -200,14 +186,13 @@ func (h *TestPushNotificationHandler) GetUserTokens(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"userId":       userID,
-		"tokenCount":   len(tokens),
-		"tokens":       maskedTokens,
+		"userId":        userID,
+		"tokenCount":    len(tokens),
+		"tokens":        maskedTokens,
 		"hasRegistered": len(tokens) > 0,
 	})
 }
 
-// maskToken masks a token for logging/display
 func maskToken(token string) string {
 	if len(token) <= 12 {
 		return "****"

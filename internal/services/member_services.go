@@ -59,6 +59,11 @@ func (m *MemberServiceImpl) AddMember(ctx context.Context, member request.AddMem
 		return err
 	}
 
+	// 	_, err = s.memberRepo.FindMember(ctx, member.RoomID, senderID)
+	// if err != nil {
+	// 	return errors.New("forbidden: you are already add this users")
+	// }
+
 	room, err := m.roomRepository.FindByID(ctx, member.RoomID)
 	if err != nil {
 		return errors.New("room not found")

@@ -2,6 +2,7 @@ package config
 
 import (
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -13,16 +14,29 @@ type JwtConfig struct {
 	RefreshTokenExpiration int    `mapstructure:"refresh_token_expiration"`
 }
 
+type MinoConfig struct {
+	Endpoint        string        `mapstructure:"endpoint"`
+	AccessKeyID     string        `mapstructure:"access_key"`
+	SecretAccessKey string        `mapstructure:"secret_key"`
+	UseSSL          bool          `mapstructure:"ssl"`
+	Region          string        `mapstructure:"region"`
+	MaxRetries      int           `mapstructure:"max_retries"`
+	ConnectTimeout  time.Duration `mapstructure:"connect_timeout"`
+	BaseUrl         string        `mapstructure:"base_url"`
+}
+
 type Cfg struct {
 	AppEnv      string         `mapstructure:"APP_ENV"`
 	DatabaseURL string         `mapstructure:"DATABASE_URL"`
 	Secret      string         `mapstructure:"secret_key"`
+	PathTemp    string         `mapstructure:"path_temp"`
 	RabbitMQ    RabbitMQConfig `mapstructure:"rabbitmq"`
 	Redis       RedisConfig    `mapstructure:"redis"`
 	Server      ServerConfig   `mapstructure:"server"`
 	Jwt         JwtConfig      `mapstructure:"jwt"`
 	OAuth       OAuthConfig    `mapstructure:"oauth"`
 	Firebase    FirebaseConfig `mapstructure:"firebase"`
+	Minio       MinoConfig     `mapstructure:"minio"`
 }
 
 func LoadConfig() (config Cfg, err error) {
@@ -42,6 +56,7 @@ func LoadConfig() (config Cfg, err error) {
 	viper.BindEnv("rabbitmq.url", "RABBITMQ_URL")
 	viper.BindEnv("redis.addr", "REDIS_ADDR")
 	viper.BindEnv("server.port", "SERVER_PORT")
+	viper.BindEnv("path_temp", "PATH_TEMP")
 
 	// Menetapkan nilai default (prioritas terendah)
 	viper.SetDefault("APP_ENV", "development")
