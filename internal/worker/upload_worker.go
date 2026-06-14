@@ -331,7 +331,6 @@ func (d *Dispatcher) sendUploadStatusToUser(userID string, roomID string, messag
 		response.FailedFiles = failedFileDetails
 	}
 
-	// Send to sender only
 	responseJSON, _ := json.Marshal(response)
 	if err := d.wsManager.SendNotificationToUser(userID, responseJSON); err != nil {
 		log.Printf("[ERR] Gagal kirim WS status ke user %s: %v", userID, err)

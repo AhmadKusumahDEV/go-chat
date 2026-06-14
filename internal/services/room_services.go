@@ -29,6 +29,7 @@ type RoomService interface {
 type RoomServiceImpl struct {
 	roomRepository   repository.RepositoryRoom
 	memberRepository repository.RepositoryMembers
+	attachment       repository.AttachmentsRepository
 	cahce            cahce.CahceRedis
 	validate         *validator.Validate
 	manager          websocket.WebSocketManager
@@ -202,10 +203,11 @@ func (r *RoomServiceImpl) UpdateRoom(ctx context.Context, roomID string, userID 
 	return nil
 }
 
-func NewRoomServices(roomRepository repository.RepositoryRoom, memberRepository repository.RepositoryMembers, cahce cahce.CahceRedis, validate *validator.Validate) RoomService {
+func NewRoomServices(roomRepository repository.RepositoryRoom, memberRepository repository.RepositoryMembers, att repository.AttachmentsRepository, cahce cahce.CahceRedis, validate *validator.Validate) RoomService {
 	return &RoomServiceImpl{
 		roomRepository:   roomRepository,
 		memberRepository: memberRepository,
+		attachment:       att,
 		cahce:            cahce,
 		validate:         validate,
 	}

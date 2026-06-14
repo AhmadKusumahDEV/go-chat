@@ -319,6 +319,10 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 			return nil, err
 		}
 
+		if lastMsgType.String == "image" {
+			lastMsgContent.String = "Sent Photo"
+		}
+
 		// ✅ Set last message jika ada
 		if lastMsgID.Valid {
 			var userID *uuid.UUID
