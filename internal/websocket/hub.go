@@ -19,6 +19,7 @@ type WebSocketHub interface {
 	HandleBroadcast(message *BroadcastMessage)
 	GetRoomCount() int
 	BatchSubscribeToRoom(ctx context.Context, roomID []string, client *Client)
+	SubscribeToRoom(roomID string, client *Client)
 	handleRegister(client *Client)
 	handleUnregister(client *Client)
 	BroadcastToUser(userID string, message []byte) error
@@ -116,6 +117,20 @@ func (h *Hub) BatchSubscribeToRoom(ctx context.Context, roomIDs []string, client
 		room.Register(client)
 		log.Printf("Client %s joined room %s", client.UserID, roomID)
 	}
+}
+
+func (h *Hub) SubscribeToRoom(roomID string, client *Client) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+	room, exists := h.rooms[roomID]
+	if !exists {
+		room = NewRoom(roomID)
+		h.rooms[roomID] = room
+		go room.Run()
+		log.Printf("Created new room: %s", roomID)
+	}
+	room.Register(client)
+	log.Printf("Client %s joined room %s", client.UserID, roomID)
 }
 
 // handleRegister processes client registration

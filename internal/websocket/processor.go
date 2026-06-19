@@ -147,8 +147,8 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 			log.Println("Failed to publish notification to RabbitMQ", err)
 		}
 
-	case "join_room":
-		log.Println("solidd join")
+	case "join_room_event":
+		mp.hub.SubscribeToRoom(broadcastMsg.RoomID, msg.Client)
 	}
 }
 
