@@ -17,7 +17,7 @@ import (
 )
 
 type RoomService interface {
-	CreateRoom(ctx context.Context, req *request.CreateRoomRequest, create_by string) error
+	CreateRoom(ctx context.Context, req *request.CreateRoomRequest, create_by string) (uuid.UUID, error)
 	GetAllRoomUser(ctx context.Context) ([]*response.RoomResponse, error)
 	UpdateRoom(ctx context.Context, roomID string, userID string, req *request.UpdateRoomRequest) error
 	DeleteRoom(ctx context.Context, roomID string, deletedBy string) error
@@ -55,19 +55,18 @@ func (r *RoomServiceImpl) GetRoomByName(ctx context.Context, room_name request.G
 }
 
 // CreateRoom implements RoomService.
-func (r *RoomServiceImpl) CreateRoom(ctx context.Context, req *request.CreateRoomRequest, create_by string) error {
+func (r *RoomServiceImpl) CreateRoom(ctx context.Context, req *request.CreateRoomRequest, create_by string) (uuid.UUID, error) {
 	err := r.validate.Struct(req)
 
 	if err != nil {
 		log.Println("error on servies layer with name CreateRoom in validate ", err)
-		return err
+		return uuid.UUID{}, err
 	}
 
 	room, err := req.ToModel(create_by)
-
 	if err != nil {
 		log.Println("error on servies layer with name CreateRoom when dto convert to model ", err)
-		return err
+		return uuid.UUID{}, err
 	}
 
 	// Create a new member profile for the creator as an admin
@@ -99,13 +98,12 @@ func (r *RoomServiceImpl) CreateRoom(ctx context.Context, req *request.CreateRoo
 		})
 	}
 
-	err = r.roomRepository.CreateWithMember(ctx, room, members)
-
+	uuidRoom, err := r.roomRepository.CreateWithMember(ctx, room, members)
 	if err != nil {
-		return err
+		return uuid.UUID{}, err
 	}
 
-	return nil
+	return uuidRoom, nil
 }
 
 // DeleteRoom implements RoomService.

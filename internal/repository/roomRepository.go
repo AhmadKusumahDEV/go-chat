@@ -20,7 +20,7 @@ type RepositoryRoom interface {
 	FindRoomDetail(ctx context.Context, roomID string) (*models.RoomDetail, error)
 	FindRoomMembers(ctx context.Context, roomID string) ([]models.MemberDetail, error)
 	FindRoomName(ctx context.Context, roomID string) (string, error)
-	CreateWithMember(ctx context.Context, room *models.Room, members []*models.Members) error
+	CreateWithMember(ctx context.Context, room *models.Room, members []*models.Members) (uuid.UUID, error)
 }
 
 type RepositoryRoomImpl struct {
@@ -29,26 +29,26 @@ type RepositoryRoomImpl struct {
 }
 
 // CreateWithMember implements RepositoryRoom with a Database Transaction (ACID)
-func (p *RepositoryRoomImpl) CreateWithMember(ctx context.Context, room *models.Room, members []*models.Members) error {
+func (p *RepositoryRoomImpl) CreateWithMember(ctx context.Context, room *models.Room, members []*models.Members) (uuid.UUID, error) {
 	v6, err := uuid.NewV6()
 	if err != nil {
-		return err
+		return uuid.UUID{}, err
 	}
 	room.ID = v6
 
 	if err := room.Validate(); err != nil {
-		return err
+		return uuid.UUID{}, err
 	}
 	for _, member := range members {
 		member.Roomid = v6
 		if err := member.Validate(); err != nil {
-			return err
+			return uuid.UUID{}, err
 		}
 	}
 
 	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return uuid.UUID{}, err
 	}
 	defer tx.Rollback()
 
@@ -56,7 +56,7 @@ func (p *RepositoryRoomImpl) CreateWithMember(ctx context.Context, room *models.
 					VALUES ($1, $2, $3, $4, $5, $6)`
 	_, err = tx.ExecContext(ctx, roomQuery, room.ID, room.Name, room.Roomtype, room.Description, room.Isprivate, room.CreatedBy)
 	if err != nil {
-		return err
+		return uuid.UUID{}, err
 	}
 
 	memberQuery := `INSERT INTO room_members (room_id, user_id, added_by, role) 
@@ -64,7 +64,7 @@ func (p *RepositoryRoomImpl) CreateWithMember(ctx context.Context, room *models.
 	for _, member := range members {
 		_, err = tx.ExecContext(ctx, memberQuery, member.Roomid, member.Userid, member.AddedBy, member.Role)
 		if err != nil {
-			return err
+			return uuid.UUID{}, err
 		}
 	}
 
@@ -75,10 +75,10 @@ func (p *RepositoryRoomImpl) CreateWithMember(ctx context.Context, room *models.
 
 	_, err = tx.ExecContext(ctx, systemMessageQuery, room.ID, room.CreatedBy, content, "system", room.CreatedAt)
 	if err != nil {
-		return errors.New("failed insert system message")
+		return uuid.UUID{}, errors.New("failed insert system message")
 	}
 
-	return tx.Commit()
+	return v6, tx.Commit()
 }
 
 // FindMemberRoom implements RepositoryRoom.

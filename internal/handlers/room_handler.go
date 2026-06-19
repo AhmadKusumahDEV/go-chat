@@ -148,8 +148,7 @@ func (r *HandlerRoomImpl) HandleCreateRoom(c *gin.Context) {
 		return
 	}
 
-	err = r.srv.CreateRoom(c.Request.Context(), &room, userID.(string))
-
+	id, err := r.srv.CreateRoom(c.Request.Context(), &room, userID.(string))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, response.ApiResponse{
 			Status:  http.StatusInternalServerError,
@@ -161,6 +160,7 @@ func (r *HandlerRoomImpl) HandleCreateRoom(c *gin.Context) {
 	res := response.ApiResponse{
 		Status:  http.StatusOK,
 		Message: "success create room",
+		Data:    id,
 	}
 
 	c.JSON(http.StatusOK, res)
