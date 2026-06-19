@@ -126,7 +126,7 @@ func main() {
 
 	manager := websocket.NewWebSocketManager(messageServices, publisher)
 	manager.Start()
-	wsHandler := handlers.NewWebsocketHandler(manager)
+	wsHandler := handlers.NewWebsocketHandler(manager, roomServices)
 	wsRouter := router.NewWebsocketRouter(wsHandler)
 
 	uploadworker := worker.NewDispatcher(client, rds, cfg, attacmentsRepository, manager, 10, 1000)

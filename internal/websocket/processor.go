@@ -148,9 +148,7 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 		}
 
 	case "join_room":
-		mp.hub.SubscribeToRoom(broadcastMsg.RoomID, msg.Client)
-	case "leave_room":
-		mp.hub.UnsubscribeFromRoom(broadcastMsg.RoomID, msg.Client)
+		log.Println("solidd join")
 	}
 }
 

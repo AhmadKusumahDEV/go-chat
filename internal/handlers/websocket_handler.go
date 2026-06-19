@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
+	"github.com/AhmadKusumahDEV/go-chat/internal/services"
 	wsManager "github.com/AhmadKusumahDEV/go-chat/internal/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -28,6 +29,7 @@ type WebsocketHandler interface {
 
 type WebsocketHandlerImpl struct {
 	manager wsManager.WebSocketManager
+	room    services.RoomService
 }
 
 func (w *WebsocketHandlerImpl) HandleConnection(c *gin.Context) {
@@ -41,13 +43,31 @@ func (w *WebsocketHandlerImpl) HandleConnection(c *gin.Context) {
 		userInfo = userID // string
 	}
 
+	var tempRooms []string
+
+	rooms, err := w.room.GetRoomByUserID(c.Request.Context(), userInfo.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	for _, room := range rooms {
+		tempRooms = append(tempRooms, room.ID)
+	}
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("Gagal upgrade websocket: %v", err)
 		return
 	}
 
-	w.manager.HandleConnection(conn, userInfo.(string))
+	client := w.manager.HandleConnection(conn, userInfo.(string))
+
+	// join room
+	w.manager.BatchJoinRoom(tempRooms, client)
 }
 
 func (h *WebsocketHandlerImpl) SendToUser(c *gin.Context) {
@@ -83,12 +103,12 @@ func (h *WebsocketHandlerImpl) SendToUser(c *gin.Context) {
 
 func (h *WebsocketHandlerImpl) BroadcastToAll(c *gin.Context) {
 	headNotif := response.NotificationResponse{
-		Type: 		"notification",
-		Title:		"From Websocket",
-      	Body:   	"soliiddddddd",
-        SenderID: 	"1234878743",
-        SenderName: "pria solo sejati",
-        MessageID:  "1234848u834798373987948543",
+		Type:       "notification",
+		Title:      "From Websocket",
+		Body:       "soliiddddddd",
+		SenderID:   "1234878743",
+		SenderName: "pria solo sejati",
+		MessageID:  "1234848u834798373987948543",
 	}
 
 	notification, _ := json.Marshal(headNotif)
@@ -106,8 +126,9 @@ func (h *WebsocketHandlerImpl) GetConnectedUsers(c *gin.Context) {
 	})
 }
 
-func NewWebsocketHandler(manager wsManager.WebSocketManager) WebsocketHandler {
+func NewWebsocketHandler(manager wsManager.WebSocketManager, room services.RoomService) WebsocketHandler {
 	return &WebsocketHandlerImpl{
 		manager: manager,
+		room:    room,
 	}
 }

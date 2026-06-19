@@ -15,7 +15,8 @@ import (
 type WebSocketManager interface {
 	Start()
 	Stop()
-	HandleConnection(conn *websocket.Conn, userID string)
+	HandleConnection(conn *websocket.Conn, userID string) *Client
+	BatchJoinRoom(roomID []string, c *Client)
 	GetRoomStats(roomID string) (int, bool)
 	GetManagerStats() ManagerStats
 	collectStats()
@@ -105,7 +106,7 @@ func (m *WebSocketManagerImpl) Stop() {
 }
 
 // HandleConnection creates a new client and starts communication
-func (m *WebSocketManagerImpl) HandleConnection(conn *websocket.Conn, userID string) {
+func (m *WebSocketManagerImpl) HandleConnection(conn *websocket.Conn, userID string) *Client {
 	m.updateStats(func(stats *ManagerStats) {
 		stats.TotalConnections++
 		stats.ActiveClients++
@@ -117,7 +118,7 @@ func (m *WebSocketManagerImpl) HandleConnection(conn *websocket.Conn, userID str
 	if !ok {
 		log.Printf("Invalid client type: %T", client)
 		conn.Close()
-		return
+		return nil
 	}
 
 	m.hub.Register(c)
@@ -139,7 +140,7 @@ func (m *WebSocketManagerImpl) HandleConnection(conn *websocket.Conn, userID str
 		client.WritePump()
 	}()
 
-	log.Printf("New client connected: user=%s", userID)
+	return c
 }
 
 // GetRoomStats returns statistics for a room
@@ -206,4 +207,10 @@ func (m *WebSocketManagerImpl) BroadcastToRoomExcept(roomID string, message []by
 
 func (m *WebSocketManagerImpl) MessageByID(messageID string) (*response.MessageResponse, error) {
 	return m.processor.GetMessageID(context.Background(), messageID)
+}
+
+func (m *WebSocketManagerImpl) BatchJoinRoom(roomID []string, c *Client) {
+	ctx := context.Background()
+
+	m.hub.BatchSubscribeToRoom(ctx, roomID, c)
 }

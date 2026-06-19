@@ -83,23 +83,36 @@ func (r *Room) handleUnregister(client *Client) {
 
 // handleBroadcast sends a message to all clients in the room
 func (r *Room) handleBroadcast(message *BroadcastMessage) {
-	log.Printf("Broadcasting message in room %s", r.ID)
-
-	for userID, client := range r.clients {
-		if message.SenderID != "" && userID == message.SenderID {
+	r.mutex.RLock()
+	clients := make([]*Client, 0, len(r.clients))
+	for userId, client := range r.clients {
+		if message.SenderID != "" && userId == message.SenderID {
 			continue
 		}
 
-		select {
-		case client.Send <- message.Data:
+		clients = append(clients, client)
+	}
+	r.mutex.RUnlock()
 
-		case <-time.After(5 * time.Second):
-			log.Printf("Client %s timeout in room %s", userID, r.ID)
+	for _, client := range clients {
 
-			go func(c *Client) {
-				r.unregister <- c
-			}(client)
-		}
+		go func(c *Client) {
+			timer := time.NewTimer(5 * time.Minute)
+			defer timer.Stop()
+
+			select {
+			case c.Send <- message.Data:
+
+			case <-timer.C:
+				log.Printf("Client %s timeout in room %s", c.UserID, r.ID)
+
+				select {
+				case r.unregister <- c:
+				default:
+					log.Println("client timeout")
+				}
+			}
+		}(client)
 	}
 }
 

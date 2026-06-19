@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"context"
 	"errors"
 	"log"
 	"sync"
@@ -17,10 +18,9 @@ type WebSocketHub interface {
 	GetRoom(roomID string) WebSocketRoom
 	HandleBroadcast(message *BroadcastMessage)
 	GetRoomCount() int
-	SubscribeToRoom(roomID string, client *Client)
+	BatchSubscribeToRoom(ctx context.Context, roomID []string, client *Client)
 	handleRegister(client *Client)
 	handleUnregister(client *Client)
-	UnsubscribeFromRoom(roomID string, client *Client)
 	BroadcastToUser(userID string, message []byte) error
 	BroadcastToAllUsers(message []byte)
 	GetAllConnectedUsers() []string
@@ -36,8 +36,6 @@ type Hub struct {
 	mutex      sync.RWMutex
 }
 
-// subscribeToRoom implements WebSocketHub.
-
 func NewHub() WebSocketHub {
 	return &Hub{
 		client:     make(map[*Client]bool),
@@ -50,6 +48,8 @@ func NewHub() WebSocketHub {
 }
 
 func (h *Hub) Run(signal chan struct{}) {
+	go h.CronJobEmptyRoom(signal)
+
 	for {
 		select {
 		case client := <-h.register:
@@ -67,41 +67,55 @@ func (h *Hub) Run(signal chan struct{}) {
 	}
 }
 
-// unsubscribeFromRoom implements WebSocketHub.
-func (h *Hub) SubscribeToRoom(roomID string, client *Client) {
-	defer h.mutex.Unlock()
-	h.mutex.Lock()
-	room, exists := h.rooms[roomID]
-	if !exists {
-		room = NewRoom(roomID)
-		h.rooms[roomID] = room
-		go room.Run()
-		log.Printf("Created new room: %s", roomID)
-	}
+func (h *Hub) CronJobEmptyRoom(signal chan struct{}) {
+	intv := time.NewTicker(30 * time.Minute)
+	defer intv.Stop()
 
-	room.Register(client)
-	log.Printf("Client %s joined room %s", client.UserID, roomID)
+	for {
+		select {
+		case <-intv.C:
+			h.ClearRoomLeak()
+		case <-signal:
+			return
+		}
+	}
 }
 
-func (h *Hub) UnsubscribeFromRoom(roomID string, client *Client) {
+func (h *Hub) ClearRoomLeak() {
 	h.mutex.Lock()
-	room, exists := h.rooms[roomID]
-	h.mutex.Unlock()
+	defer h.mutex.Unlock()
 
-	if exists {
-		room.Unregister(client)
+	var deleteRoom []string
 
-		// Clean up empty rooms
+	for id, room := range h.rooms {
 		if room.IsEmpty() {
-			h.mutex.Lock()
-			delete(h.rooms, roomID)
-			h.mutex.Unlock()
-			room.Stop()
-			log.Printf("Room %s cleaned up (no clients)", roomID)
+			deleteRoom = append(deleteRoom, id)
 		}
 	}
 
-	log.Printf("Client %s left room %s", client.UserID, roomID)
+	for _, roomid := range deleteRoom {
+		instanceRoom := h.rooms[roomid]
+		instanceRoom.Stop()
+		delete(h.rooms, roomid)
+	}
+
+	log.Println("cleary go routine room leak")
+}
+
+func (h *Hub) BatchSubscribeToRoom(ctx context.Context, roomIDs []string, client *Client) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+	for _, roomID := range roomIDs {
+		room, exists := h.rooms[roomID]
+		if !exists {
+			room = NewRoom(roomID)
+			h.rooms[roomID] = room
+			go room.Run()
+			log.Printf("Created new room: %s", roomID)
+		}
+		room.Register(client)
+		log.Printf("Client %s joined room %s", client.UserID, roomID)
+	}
 }
 
 // handleRegister processes client registration
@@ -136,7 +150,7 @@ func (h *Hub) handleUnregister(client *Client) {
 		room.Unregister(client)
 	}
 
-	client.Close() // Ensure the client resources are properly closed
+	client.Conn.Close() // Ensure the client resources are properly closed
 	log.Printf("Client %s unregistered from Hub", client.UserID)
 }
 
@@ -148,10 +162,8 @@ func (h *Hub) HandleBroadcast(message *BroadcastMessage) {
 
 	if exists {
 		if message.SenderID != "" {
-			// Broadcast to all except sender
 			room.BroadcastExcept(message.Data, message.SenderID)
 		} else {
-			// Broadcast to all
 			room.Broadcast(message.Data)
 		}
 	}

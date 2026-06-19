@@ -127,3 +127,11 @@ func (m *minioStorage) GetObjectBySignedURL(ctx context.Context, bucketName stri
 
 	return presignedURL.String(), nil
 }
+
+func (m *minioStorage) GetObjectURL(ctx context.Context, objectName string, bucketName string) (string, error) {
+	if m.baseURL == "" {
+		return "", errors.New("base url is empty")
+	}
+
+	return fmt.Sprintf("%s/%s/%s", m.baseURL, bucketName, objectName), nil
+}

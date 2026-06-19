@@ -13,7 +13,6 @@ type WebSocketClient interface {
 	WritePump()
 	GetUserID() string
 	SendMessage(message []byte)
-	Close()
 }
 
 type Client struct {
@@ -131,20 +130,11 @@ func (c *Client) SendMessage(message []byte) {
 	select {
 	case c.Send <- message:
 	default:
-		c.Close()
-		c.Hub.Unregister(c)
+		c.Conn.Close()
 	}
 }
 
 // GetUserID returns the client's user ID
 func (c *Client) GetUserID() string {
 	return c.UserID
-}
-
-// Close closes the client connection
-func (c *Client) Close() {
-	c.closeOnce.Do(func() {
-		close(c.Send)
-		c.Conn.Close()
-	})
 }
