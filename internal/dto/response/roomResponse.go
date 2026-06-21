@@ -4,13 +4,16 @@ import "time"
 
 // RoomResponse untuk response list rooms dengan last message
 type RoomResponse struct {
-	ID          string               `json:"id"`
-	Name        string               `json:"name"`
-	Description string               `json:"description,omitempty"`
-	RoomType    string               `json:"room_type"`
-	IsPrivate   bool                 `json:"is_private"`
-	CreatedAt   time.Time            `json:"created_at"`
-	LastMessage *LastMessageResponse `json:"last_message,omitempty"`
+	ID              string               `json:"id"`
+	Name            string               `json:"name"`
+	Description     string               `json:"description,omitempty"`
+	RoomType        string               `json:"room_type"`
+	IsPrivate       bool                 `json:"is_private"`
+	CreatedAt       time.Time            `json:"created_at"`
+	TargetUserID    *string              `json:"target_user_id,omitempty"`
+	TargetUsername  *string              `json:"target_username,omitempty"`
+	TargetAvatarUrl *string              `json:"target_avatar_url,omitempty"`
+	LastMessage     *LastMessageResponse `json:"last_message,omitempty"`
 }
 
 // LastMessageResponse untuk detail message terakhir di room
@@ -24,23 +27,23 @@ type LastMessageResponse struct {
 
 // RoomDetailResponse untuk menampilkan informasi lengkap sebuah room
 type RoomDetailResponse struct {
-	ID          string              `json:"id"`
-	Name        string              `json:"name"`
-	Description string              `json:"description,omitempty"`
-	RoomType    string              `json:"room_type"`
-	IsPrivate   bool                `json:"is_private"`
-	CreatedAt   time.Time           `json:"created_at"`
-	CreatedBy   string              `json:"created_by"`
-	MemberCount int                 `json:"member_count"`
+	ID          string                 `json:"id"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	RoomType    string                 `json:"room_type"`
+	IsPrivate   bool                   `json:"is_private"`
+	CreatedAt   time.Time              `json:"created_at"`
+	CreatedBy   string                 `json:"created_by"`
+	MemberCount int                    `json:"member_count"`
 	Members     []MemberDetailResponse `json:"members"`
 }
 
 // MemberDetailResponse untuk menampilkan detail member dalam room
 type MemberDetailResponse struct {
-	UserID    string  `json:"user_id"`
-	Username  string  `json:"username"`
-	Email     string  `json:"email"`
-	AvatarUrl *string `json:"avatar_url,omitempty"`
-	Role      string  `json:"role"`
+	UserID    string    `json:"user_id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	AvatarUrl *string   `json:"avatar_url,omitempty"`
+	Role      string    `json:"role"`
 	JoinedAt  time.Time `json:"joined_at"`
 }

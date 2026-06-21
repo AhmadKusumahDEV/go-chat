@@ -20,10 +20,114 @@ type HandlerRoom interface {
 	HandleGetRoomDetail(c *gin.Context)
 	HandlerUpdatedRoom(c *gin.Context)
 	HandlerDeleteRoom(c *gin.Context)
+	HandleCreateDirectRoom(c *gin.Context)
+	HandleCheckDirectRoom(c *gin.Context)
 }
 
 type HandlerRoomImpl struct {
 	srv services.RoomService
+}
+
+// HandleCheckDirectRoom implements [HandlerRoom].
+func (r *HandlerRoomImpl) HandleCheckDirectRoom(c *gin.Context) {
+	targetUserID := c.Param("id")
+
+	_, err := uuid.FromString(targetUserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "id tidak valid",
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
+		return
+	}
+
+	id, res, err := r.srv.CheckDirectRoom(c.Request.Context(), userID.(string), targetUserID)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			c.JSON(http.StatusGatewayTimeout, response.ApiResponse{
+				Status:  http.StatusGatewayTimeout,
+				Message: "Request Timeout",
+			})
+			return
+		}
+		if !res {
+			c.JSON(http.StatusNotFound, response.ApiResponse{
+				Status:  http.StatusNotFound,
+				Message: err.Error(),
+				Data:    false,
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: "terjadi kesalahan pada server",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status: http.StatusOK,
+		Data: gin.H{
+			"id":    id,
+			"found": res,
+		},
+		Message: "success",
+	})
+}
+
+// HandleCreateDirectRoom implements [HandlerRoom].
+func (r *HandlerRoomImpl) HandleCreateDirectRoom(c *gin.Context) {
+	var req request.CreateDirectRoomRequest
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
+		return
+	}
+
+	err := c.ShouldBindJSON(&req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	id, err := r.srv.CreateDirectRoom(c.Request.Context(), &req, userID.(string))
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			c.JSON(http.StatusGatewayTimeout, response.ApiResponse{
+				Status:  http.StatusGatewayTimeout,
+				Message: "Request Timeout",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Data:    id,
+		Message: "success",
+	})
+
 }
 
 // HandlerDeleteRoom implements HandlerRoom.

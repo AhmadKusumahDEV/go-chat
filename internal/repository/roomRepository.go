@@ -21,11 +21,43 @@ type RepositoryRoom interface {
 	FindRoomMembers(ctx context.Context, roomID string) ([]models.MemberDetail, error)
 	FindRoomName(ctx context.Context, roomID string) (string, error)
 	CreateWithMember(ctx context.Context, room *models.Room, members []*models.Members) (uuid.UUID, error)
+	CreateRoomDirect(ctx context.Context, room *models.Room, members []*models.Members, msg *models.Message) error
+	CheckDirectRoom(ctx context.Context, userId string, userTargetId string) (string, error)
 }
 
 type RepositoryRoomImpl struct {
 	*BaseRepository[*models.Room]
 	db *sql.DB
+}
+
+func (p *RepositoryRoomImpl) CheckDirectRoom(ctx context.Context, userId string, userTargetId string) (string, error) {
+	var roomID string
+	query := `
+		SELECT 
+			r.id
+		FROM
+			rooms r
+		JOIN
+			room_members rm
+			ON r.id = rm.room_id
+		JOIN 
+			room_members rm2
+			ON r.id = rm2.room_id
+		WHERE
+			r.room_type = 'direct'
+			AND rm.user_id = $1
+          	AND rm2.user_id = $2
+	`
+	err := p.db.QueryRowContext(ctx, query, userId, userTargetId).Scan(&roomID)
+	if err != nil {
+		log.Println(err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", errors.New("tidak ditemukan room direct")
+		}
+		return "", err
+	}
+
+	return roomID, nil
 }
 
 // CreateWithMember implements RepositoryRoom with a Database Transaction (ACID)
@@ -79,6 +111,56 @@ func (p *RepositoryRoomImpl) CreateWithMember(ctx context.Context, room *models.
 	}
 
 	return v6, tx.Commit()
+}
+
+func (p *RepositoryRoomImpl) CreateRoomDirect(ctx context.Context, room *models.Room, members []*models.Members, msg *models.Message) error {
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	roomQuery := `
+		INSERT INTO
+			rooms
+		(
+			id,
+			room_type,
+			is_private,
+			created_by
+		)
+		VALUES
+			($1, $2, $3, $4)
+	`
+	_, err = tx.ExecContext(ctx, roomQuery, room.ID, room.Roomtype, room.Isprivate, room.CreatedBy)
+	if err != nil {
+		return err
+	}
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO room_members (room_id, user_id, role, added_by)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (room_id, user_id) DO NOTHING
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, m := range members {
+		_, err := stmt.ExecContext(ctx, m.Roomid, m.Userid, m.Role, m.AddedBy)
+		if err != nil {
+			return err
+		}
+	}
+
+	messageQuery := `INSERT INTO messages (id, room_id, content, message_type, user_id, timestamp) VALUES ($1, $2, $3, $4, $5 , $6)`
+	_, err = tx.ExecContext(ctx, messageQuery, msg.ID, room.ID, msg.Content, msg.Type, msg.SenderID, msg.Timestamp)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // FindMemberRoom implements RepositoryRoom.
@@ -268,6 +350,9 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
             r.is_private, 
             r.created_by,
             r.created_at,
+			rm2.user_id AS target_user_id,
+			u.avatar_url,
+			u.username,
             m.id AS last_message_id,
             m.content AS last_message_content,
             m.user_id AS last_message_user_id,
@@ -275,6 +360,14 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
             m.timestamp AS last_message_timestamp
         FROM rooms r
         JOIN room_members rm ON r.id = rm.room_id
+		LEFT JOIN 
+			room_members rm2
+			ON r.id = rm2.room_id
+			AND r.room_type = 'direct'
+			AND rm2.user_id != rm.user_id
+		LEFT JOIN 
+			users u
+			ON u.id = rm2.user_id
         LEFT JOIN LATERAL (
             SELECT id, content, user_id, message_type, timestamp
             FROM messages
@@ -301,15 +394,23 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 		var lastMsgUserID sql.NullString
 		var lastMsgType sql.NullString
 		var lastMsgTimestamp sql.NullTime
+		var targetUserID sql.NullString
+		var avatar_url sql.NullString
+		var username sql.NullString
+		var roomName sql.NullString
+		var decsription sql.NullString
 
 		if err := rows.Scan(
 			&room.ID,
-			&room.Name,
-			&room.Description,
+			&roomName,
+			&decsription,
 			&room.Roomtype,
 			&room.Isprivate,
 			&room.CreatedBy,
 			&room.CreatedAt,
+			&targetUserID,
+			&avatar_url,
+			&username,
 			&lastMsgID,
 			&lastMsgContent,
 			&lastMsgUserID,
@@ -321,6 +422,24 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 
 		if lastMsgType.String == "image" {
 			lastMsgContent.String = "Sent Photo"
+		}
+
+		if targetUserID.Valid {
+			Id, _ := uuid.FromString(targetUserID.String)
+			room.TargetUserID = &Id
+			room.TargetUsername = &username.String
+
+			if avatar_url.Valid {
+				room.TargetAvatarUrl = &avatar_url.String
+			}
+		}
+
+		if roomName.Valid {
+			room.Name = roomName.String
+		}
+
+		if decsription.Valid {
+			room.Description = decsription.String
 		}
 
 		// ✅ Set last message jika ada

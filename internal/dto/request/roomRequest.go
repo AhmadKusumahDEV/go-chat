@@ -33,6 +33,12 @@ func (r *CreateRoomRequest) ToModel(id string) (*models.Room, error) {
 	}, nil
 }
 
+type CreateDirectRoomRequest struct {
+	TargetUserId string `json:"target_user_id" validate:"required,uuid"`
+	MessageType  string `json:"message_type" validate:"required,oneof=text image file"`
+	Content      string `json:"content" validate:"required"`
+}
+
 type UpdateRoomRequest struct {
 	Name        *string `json:"name" validate:"omitempty,min=3,max=100"`
 	Description *string `json:"description" validate:"omitempty,max=500"`

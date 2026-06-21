@@ -94,7 +94,7 @@ services:
   job_worker:
     build:
       context: .
-      dockerfile: cmd/worker_notifiaction/Dockerfile
+      dockerfile: cmd/worker-notifiaction/Dockerfile
     container_name: job_worker
     restart: unless-stopped
     depends_on:

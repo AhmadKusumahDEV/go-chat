@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/cahce"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
@@ -18,6 +19,8 @@ import (
 
 type RoomService interface {
 	CreateRoom(ctx context.Context, req *request.CreateRoomRequest, create_by string) (uuid.UUID, error)
+	CheckDirectRoom(ctx context.Context, userID string, targetUserId string) (string, bool, error)
+	CreateDirectRoom(ctx context.Context, req *request.CreateDirectRoomRequest, userID string) (uuid.UUID, error)
 	GetAllRoomUser(ctx context.Context) ([]*response.RoomResponse, error)
 	UpdateRoom(ctx context.Context, roomID string, userID string, req *request.UpdateRoomRequest) error
 	DeleteRoom(ctx context.Context, roomID string, deletedBy string) error
@@ -33,6 +36,85 @@ type RoomServiceImpl struct {
 	cahce            cahce.CahceRedis
 	validate         *validator.Validate
 	manager          websocket.WebSocketManager
+}
+
+func NewRoomServices(roomRepository repository.RepositoryRoom, memberRepository repository.RepositoryMembers, att repository.AttachmentsRepository, cahce cahce.CahceRedis, validate *validator.Validate) RoomService {
+	return &RoomServiceImpl{
+		roomRepository:   roomRepository,
+		memberRepository: memberRepository,
+		attachment:       att,
+		cahce:            cahce,
+		validate:         validate,
+	}
+}
+
+func (r *RoomServiceImpl) CheckDirectRoom(ctx context.Context, userID string, targetUserId string) (string, bool, error) {
+	id, err := r.roomRepository.CheckDirectRoom(ctx, userID, targetUserId)
+	if err != nil {
+		return "", false, errors.New("room tidak di temukan")
+	}
+
+	return id, true, nil
+}
+
+// CreateDirectRoom implements [RoomService].
+func (r *RoomServiceImpl) CreateDirectRoom(ctx context.Context, req *request.CreateDirectRoomRequest, userID string) (uuid.UUID, error) {
+	err := r.validate.Struct(req)
+	if err != nil {
+		log.Println("error on servies layer with name CreateDirectRoom in validate ", err)
+		return uuid.UUID{}, errors.New("data yang tidak memenuhi format")
+	}
+
+	targetId, _ := uuid.FromString(req.TargetUserId)
+	userId, _ := uuid.FromString(userID)
+
+	v6, err := uuid.NewV6()
+	if err != nil {
+		return uuid.UUID{}, errors.New("failed generate uuid")
+	}
+
+	idMessageV6, err := uuid.NewV6()
+	if err != nil {
+		return uuid.UUID{}, errors.New("failed generate uuid")
+	}
+
+	roomData := &models.Room{
+		ID:        v6,
+		Roomtype:  "direct",
+		Isprivate: true,
+		CreatedBy: userId,
+	}
+
+	membersData := []*models.Members{
+		{
+			Roomid:  v6,
+			Userid:  userId,
+			AddedBy: userId,
+			Role:    "member",
+		},
+		{
+			Roomid:  v6,
+			Userid:  targetId,
+			AddedBy: userId,
+			Role:    "member",
+		},
+	}
+
+	messageData := &models.Message{
+		ID:        idMessageV6,
+		RoomID:    v6,
+		SenderID:  &targetId,
+		Content:   req.Content,
+		Type:      req.MessageType,
+		Timestamp: time.Now(),
+	}
+
+	err = r.roomRepository.CreateRoomDirect(ctx, roomData, membersData, messageData)
+	if err != nil {
+		return uuid.UUID{}, errors.New("gagal menyimpan data")
+	}
+
+	return v6, nil
 }
 
 // GetRoomByName implements RoomService.
@@ -199,16 +281,6 @@ func (r *RoomServiceImpl) UpdateRoom(ctx context.Context, roomID string, userID 
 	}
 
 	return nil
-}
-
-func NewRoomServices(roomRepository repository.RepositoryRoom, memberRepository repository.RepositoryMembers, att repository.AttachmentsRepository, cahce cahce.CahceRedis, validate *validator.Validate) RoomService {
-	return &RoomServiceImpl{
-		roomRepository:   roomRepository,
-		memberRepository: memberRepository,
-		attachment:       att,
-		cahce:            cahce,
-		validate:         validate,
-	}
 }
 
 // GetRoomDetail implements RoomService - returns full room details with members list
