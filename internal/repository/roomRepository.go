@@ -84,9 +84,9 @@ func (p *RepositoryRoomImpl) CreateWithMember(ctx context.Context, room *models.
 	}
 	defer tx.Rollback()
 
-	roomQuery := `INSERT INTO rooms (id, room_name, room_type, description, is_private, created_by) 
-					VALUES ($1, $2, $3, $4, $5, $6)`
-	_, err = tx.ExecContext(ctx, roomQuery, room.ID, room.Name, room.Roomtype, room.Description, room.Isprivate, room.CreatedBy)
+	roomQuery := `INSERT INTO rooms (id, room_name, room_type, description, is_private, avatar_url , created_by) 
+					VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	_, err = tx.ExecContext(ctx, roomQuery, room.ID, room.Name, room.Roomtype, room.Description, room.Isprivate, room.AvatarUrl, room.CreatedBy)
 	if err != nil {
 		return uuid.UUID{}, err
 	}
@@ -350,6 +350,7 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
             r.is_private, 
             r.created_by,
             r.created_at,
+			r.avatar_url,
 			rm2.user_id AS target_user_id,
 			u.avatar_url,
 			u.username,
@@ -389,13 +390,14 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 
 	for rows.Next() {
 		var room models.Room
+		var avatarUrl sql.NullString
 		var lastMsgID sql.NullString
 		var lastMsgContent sql.NullString
 		var lastMsgUserID sql.NullString
 		var lastMsgType sql.NullString
 		var lastMsgTimestamp sql.NullTime
 		var targetUserID sql.NullString
-		var avatar_url sql.NullString
+		var targetAvatarUrl sql.NullString
 		var username sql.NullString
 		var roomName sql.NullString
 		var decsription sql.NullString
@@ -408,8 +410,9 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 			&room.Isprivate,
 			&room.CreatedBy,
 			&room.CreatedAt,
+			&avatarUrl,
 			&targetUserID,
-			&avatar_url,
+			&targetAvatarUrl,
 			&username,
 			&lastMsgID,
 			&lastMsgContent,
@@ -429,9 +432,13 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 			room.TargetUserID = &Id
 			room.TargetUsername = &username.String
 
-			if avatar_url.Valid {
-				room.TargetAvatarUrl = &avatar_url.String
+			if targetAvatarUrl.Valid {
+				room.TargetAvatarUrl = &targetAvatarUrl.String
 			}
+		}
+
+		if avatarUrl.Valid {
+			room.AvatarUrl = &avatarUrl.String
 		}
 
 		if roomName.Valid {

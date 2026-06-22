@@ -1,6 +1,7 @@
 package request
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
@@ -18,6 +19,7 @@ type CreateRoomRequest struct {
 func (r *CreateRoomRequest) ToModel(id string) (*models.Room, error) {
 	currentDate := time.Now()
 	strToUuid, err := uuid.FromString(id)
+	defaultAvatar := fmt.Sprintf("https://api.dicebear.com/10.x/initials/png?seed=%s", r.Name)
 
 	if err != nil {
 		return nil, err
@@ -28,6 +30,7 @@ func (r *CreateRoomRequest) ToModel(id string) (*models.Room, error) {
 		Description: r.Description,
 		Roomtype:    r.RoomType,
 		Isprivate:   *r.IsPrivate,
+		AvatarUrl:   &defaultAvatar,
 		CreatedBy:   strToUuid,
 		CreatedAt:   currentDate,
 	}, nil

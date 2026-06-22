@@ -174,19 +174,26 @@ func RoomResponses(rooms []*models.Room) []*response.RoomResponse {
 // RoomResponse converts single Room model to RoomResponse DTO
 func RoomResponse(room *models.Room) *response.RoomResponse {
 	resp := &response.RoomResponse{
-		ID:              room.ID.String(),
-		Name:            room.Name,
-		Description:     room.Description,
-		RoomType:        room.Roomtype,
-		IsPrivate:       room.Isprivate,
-		CreatedAt:       room.CreatedAt,
-		TargetUsername:  room.TargetUsername,
-		TargetAvatarUrl: room.TargetAvatarUrl,
+		ID:             room.ID.String(),
+		Name:           room.Name,
+		Description:    room.Description,
+		RoomType:       room.Roomtype,
+		IsPrivate:      room.Isprivate,
+		CreatedAt:      room.CreatedAt,
+		TargetUsername: room.TargetUsername,
 	}
 
 	if room.TargetUserID != nil {
 		targetIDStr := room.TargetUserID.String()
 		resp.TargetUserID = &targetIDStr
+	}
+
+	if room.AvatarUrl != nil {
+		resp.AvatarUrl = room.AvatarUrl
+	}
+
+	if room.Roomtype == "direct" {
+		resp.TargetAvatarUrl = room.TargetAvatarUrl
 	}
 
 	if room.LastMessage != nil {

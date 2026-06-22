@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
@@ -135,10 +136,16 @@ func (u *UsersServivesImpl) RegisterUser(ctx context.Context, req *request.Regis
 	// 2. Hash password and create user
 	password := helpers.HashPassword(req.Password)
 
+	avatarDefault := fmt.Sprintf("https://api.dicebear.com/10.x/initials/png?seed=%s", req.Username)
+
 	dtoToModels := models.Users{
 		Username: req.Username,
 		Email:    req.Email,
 		Password: password,
+		AvatarUrl: sql.NullString{
+			String: avatarDefault,
+			Valid:  true,
+		},
 	}
 
 	err = u.userRepository.Create(ctx, &dtoToModels)

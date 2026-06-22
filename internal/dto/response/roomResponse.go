@@ -8,6 +8,7 @@ type RoomResponse struct {
 	Name            string               `json:"name"`
 	Description     string               `json:"description,omitempty"`
 	RoomType        string               `json:"room_type"`
+	AvatarUrl       *string              `json:"avatar"`
 	IsPrivate       bool                 `json:"is_private"`
 	CreatedAt       time.Time            `json:"created_at"`
 	TargetUserID    *string              `json:"target_user_id,omitempty"`

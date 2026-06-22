@@ -65,6 +65,10 @@ func (r *RoomServiceImpl) CreateDirectRoom(ctx context.Context, req *request.Cre
 		return uuid.UUID{}, errors.New("data yang tidak memenuhi format")
 	}
 
+	if req.TargetUserId == userID {
+		return uuid.UUID{}, errors.New("tidak bisa membuat room dengan diri sendiri")
+	}
+
 	targetId, _ := uuid.FromString(req.TargetUserId)
 	userId, _ := uuid.FromString(userID)
 
