@@ -107,7 +107,7 @@ func (r *RoomServiceImpl) CreateDirectRoom(ctx context.Context, req *request.Cre
 	messageData := &models.Message{
 		ID:        idMessageV6,
 		RoomID:    v6,
-		SenderID:  &targetId,
+		SenderID:  &userId,
 		Content:   req.Content,
 		Type:      req.MessageType,
 		Timestamp: time.Now(),
