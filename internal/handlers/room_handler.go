@@ -101,7 +101,7 @@ func (r *HandlerRoomImpl) HandleCreateDirectRoom(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ApiResponse{
 			Status:  http.StatusBadRequest,
-			Message: err.Error(),
+			Message: "data yang dikirim tidak valid",
 		})
 		return
 	}
