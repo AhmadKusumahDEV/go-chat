@@ -13,7 +13,7 @@ type UserResponse struct {
 	Email     string    `json:"email"`
 	About     *string   `json:"about"`
 	CreatedAt time.Time `json:"created_at"`
-	AvatarUrl *string   `json:"avatar_url"`
+	AvatarUrl *string   `json:"avatar"`
 }
 
 type JwtReponse struct {
