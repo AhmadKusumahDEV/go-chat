@@ -20,6 +20,10 @@ type MessageSender interface {
 	GetMessageByID(ctx context.Context, messageID string) (*response.MessageResponse, error)
 }
 
+type GetRoomSpecifice interface {
+	GetSpecificRoomByUserID(ctx context.Context, userID string, roomID string) (*response.RoomResponse, error)
+}
+
 type WebsocketProcessor interface {
 	QueueMessage(msg *ProcessMessage)
 	Start()
@@ -28,6 +32,7 @@ type WebsocketProcessor interface {
 	validateMessage(msg *BroadcastMessage) error
 	worker(id int)
 	GetMessageID(ctx context.Context, messageID string) (*response.MessageResponse, error)
+	NewRoomEvent(ctx context.Context, client *Client, targetUserId string, roomID string)
 }
 
 // MessageProcessorImpl implements MessageProcessor interface
@@ -36,6 +41,7 @@ type MessageProcessorImpl struct {
 	workers        int
 	hub            WebSocketHub
 	messageService MessageSender
+	roomService    GetRoomSpecifice
 	publisher      queue.Publisher
 	shutdown       chan struct{}
 	wg             sync.WaitGroup
@@ -52,12 +58,13 @@ type ProcessMessage struct {
 }
 
 // NewMessageProcessor creates a new message processor
-func NewMessageProcessor(workers int, hub WebSocketHub, messageService MessageSender, publisher queue.Publisher) WebsocketProcessor {
+func NewMessageProcessor(workers int, hub WebSocketHub, messageService MessageSender, room GetRoomSpecifice, publisher queue.Publisher) WebsocketProcessor {
 	return &MessageProcessorImpl{
 		workQueue:      make(chan *ProcessMessage, 1000),
 		workers:        workers,
 		hub:            hub,
 		messageService: messageService,
+		roomService:    room,
 		publisher:      publisher,
 		shutdown:       make(chan struct{}),
 		wg:             sync.WaitGroup{},
@@ -149,7 +156,62 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 
 	case "join_room_event":
 		mp.hub.SubscribeToRoom(broadcastMsg.RoomID, msg.Client)
+
+	case "create_room_event":
+		var userID request.EventNewDirectRoom
+		err := json.Unmarshal(broadcastMsg.Data, &userID)
+		if err != nil {
+			log.Println("failed get value uesr target id")
+			return
+		}
+		mp.NewRoomEvent(context.Background(), msg.Client, userID.TargetUesrID, broadcastMsg.RoomID)
 	}
+}
+
+func (mp *MessageProcessorImpl) NewRoomEvent(ctx context.Context, client *Client, targetUserId string, roomID string) {
+	lastMessage, err := mp.roomService.GetSpecificRoomByUserID(ctx, targetUserId, roomID)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	dataRoom := response.EventNewRoomDirectResponse{
+		RoomID: roomID,
+		Type:   "new_room",
+		Data:   lastMessage,
+	}
+
+	message, err := json.Marshal(dataRoom)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	notifEvent := queue.NotificationEvent{
+		Type:       "message_Direct",
+		MessageID:  lastMessage.LastMessage.ID,
+		RoomID:     lastMessage.ID,
+		SenderID:   client.UserID,
+		SenderName: *lastMessage.TargetUsername,
+		Title:      "New Message",
+		Body:       lastMessage.LastMessage.Content,
+	}
+
+	exists := mp.hub.handleRegisterNewDirectRoom(client, targetUserId, roomID)
+	if exists == nil {
+		log.Println("publish to user")
+		if err := mp.publisher.PublishNotification(ctx, notifEvent); err != nil {
+			log.Println("Failed to publish notification to RabbitMQ", err)
+		}
+		return
+	}
+
+	log.Println("publish to user")
+	if err := mp.publisher.PublishNotification(ctx, notifEvent); err != nil {
+		log.Println("Failed to publish notification to RabbitMQ", err)
+	}
+
+	mp.hub.BroadcastToRoomExcept(roomID, message, client.UserID)
 }
 
 // validateMessage checks if the message is valid

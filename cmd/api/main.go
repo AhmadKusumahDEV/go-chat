@@ -124,7 +124,7 @@ func main() {
 	messageServices := services.NewMessageServices(messageRepository, memberRepository, client)
 	memberServices := services.NewMemberServices(roomRepository, memberRepository, usersRepository, messageRepository, newClientRedis, validate)
 
-	manager := websocket.NewWebSocketManager(messageServices, publisher)
+	manager := websocket.NewWebSocketManager(messageServices, roomServices, publisher)
 	manager.Start()
 	wsHandler := handlers.NewWebsocketHandler(manager, roomServices)
 	wsRouter := router.NewWebsocketRouter(wsHandler)

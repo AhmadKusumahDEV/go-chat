@@ -25,6 +25,7 @@ type WebSocketHub interface {
 	BroadcastToUser(userID string, message []byte) error
 	BroadcastToAllUsers(message []byte)
 	GetAllConnectedUsers() []string
+	handleRegisterNewDirectRoom(client *Client, targetID string, roomID string) *Client
 }
 
 // Hub implements WebSocketHub interface
@@ -131,6 +132,40 @@ func (h *Hub) SubscribeToRoom(roomID string, client *Client) {
 	}
 	room.Register(client)
 	log.Printf("Client %s joined room %s", client.UserID, roomID)
+}
+
+func (h *Hub) handleRegisterNewDirectRoom(client *Client, targetID string, roomID string) *Client {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	room, exists := h.rooms[roomID]
+	if !exists {
+		room = NewRoom(roomID)
+		h.rooms[roomID] = room
+		go room.Run()
+		log.Printf("Created new room: %s", roomID)
+	}
+
+	room.Register(client)
+
+	targetClient := h.findClientById(targetID)
+
+	if targetClient != nil {
+		room.Register(targetClient)
+		return targetClient
+	}
+
+	return nil
+}
+
+func (h *Hub) findClientById(clientId string) *Client {
+	for c := range h.client {
+		if c.UserID == clientId {
+			return c
+		}
+	}
+
+	return nil
 }
 
 // handleRegister processes client registration

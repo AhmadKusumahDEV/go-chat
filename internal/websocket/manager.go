@@ -55,9 +55,9 @@ type BroadcastMessage struct {
 }
 
 // NewWebSocketManager creates a new WebSocket manager
-func NewWebSocketManager(messageService MessageSender, publisher queue.Publisher) WebSocketManager {
+func NewWebSocketManager(messageService MessageSender, room GetRoomSpecifice, publisher queue.Publisher) WebSocketManager {
 	hub := NewHub()
-	processor := NewMessageProcessor(10, hub, messageService, publisher)
+	processor := NewMessageProcessor(10, hub, messageService, room, publisher)
 
 	manager := &WebSocketManagerImpl{
 		hub:       hub,

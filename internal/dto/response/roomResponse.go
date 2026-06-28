@@ -48,3 +48,9 @@ type MemberDetailResponse struct {
 	Role      string    `json:"role"`
 	JoinedAt  time.Time `json:"joined_at"`
 }
+
+type EventNewRoomDirectResponse struct {
+	RoomID string       `json:"room_id"`
+	Type   string       `json:"type"`
+	Data   RoomResponse `json:"data"`
+}

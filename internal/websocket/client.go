@@ -125,6 +125,57 @@ func (c *Client) WritePump() {
 	}
 }
 
+// // WritePump writes messages to the WebSocket connection
+// func (c *Client) WritePumpV2() {
+// 	ticker := time.NewTicker(54 * time.Second) // Ping interval
+// 	defer func() {
+// 		ticker.Stop()
+// 		c.Conn.Close()
+// 	}()
+
+// 	for {
+// 		select {
+// 		case message, ok := <-c.Send:
+// 			log.Println(ok)
+// 			err := c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+// 			if err != nil {
+// 				log.Println(err)
+// 				return
+// 			}
+// 			if !ok {
+// 				// Hub closed the channel
+// 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+// 				return
+// 			}
+
+// 			// Send the primary message
+// 			err = c.Conn.WriteMessage(websocket.TextMessage, message)
+// 			if err != nil {
+// 				log.Println("Failed to write message:", err)
+// 				return
+// 			}
+
+// 			// Add queued messages, sending EACH as its own separate WebSocket message
+// 			n := len(c.Send)
+// 			for i := 0; i < n; i++ {
+// 				queuedMsg := <-c.Send
+// 				c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+// 				err = c.Conn.WriteMessage(websocket.TextMessage, queuedMsg)
+// 				if err != nil {
+// 					log.Println("Failed to write queued message:", err)
+// 					return
+// 				}
+// 			}
+
+// 		case <-ticker.C:
+// 			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+// 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+// 				return
+// 			}
+// 		}
+// 	}
+// }
+
 // SendMessage sends a message to the client
 func (c *Client) SendMessage(message []byte) {
 	select {

@@ -25,6 +25,7 @@ type RoomService interface {
 	UpdateRoom(ctx context.Context, roomID string, userID string, req *request.UpdateRoomRequest) error
 	DeleteRoom(ctx context.Context, roomID string, deletedBy string) error
 	GetRoomByUserID(ctx context.Context, userID string) ([]*response.RoomResponse, error)
+	GetSpecificRoomByUserID(ctx context.Context, userID string, roomID string) (*response.RoomResponse, error)
 	GetRoomByName(ctx context.Context, room_name request.GetRoomByName) ([]*response.RoomResponse, error)
 	GetRoomDetail(ctx context.Context, roomID string, userID string) (*response.RoomDetailResponse, error)
 }
@@ -46,6 +47,16 @@ func NewRoomServices(roomRepository repository.RepositoryRoom, memberRepository 
 		cahce:            cahce,
 		validate:         validate,
 	}
+}
+
+// GetSpecificRoomByUserID implements [RoomService].
+func (r *RoomServiceImpl) GetSpecificRoomByUserID(ctx context.Context, userID string, roomID string) (*response.RoomResponse, error) {
+	res, err := r.roomRepository.FindOneRoomByUserID(ctx, userID, roomID)
+	if err != nil {
+		return nil, errors.New("failed to get spesific room")
+	}
+
+	return helpers.RoomResponse(res), nil
 }
 
 func (r *RoomServiceImpl) CheckDirectRoom(ctx context.Context, userID string, targetUserId string) (string, bool, error) {

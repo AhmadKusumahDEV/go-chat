@@ -107,9 +107,11 @@ func (h *HandlerMessageImpl) HandleGetRoomMessages(c *gin.Context) {
 		return
 	}
 
-	log.Println(result)
-
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Message: "success",
+		Data:    result,
+	})
 }
 
 // HandleSendMessage creates a new message in a room.

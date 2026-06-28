@@ -16,6 +16,7 @@ type RepositoryRoom interface {
 
 	FindRoomByName(ctx context.Context, roomName string) ([]*models.Room, error)
 	FindAllRoomByUserID(ctx context.Context, userID string) ([]*models.Room, error)
+	FindOneRoomByUserID(ctx context.Context, userID string, roomID string) (*models.Room, error)
 	FindMemberRoom(ctx context.Context, roomID string) ([]*models.MemberComposite, error)
 	FindRoomDetail(ctx context.Context, roomID string) (*models.RoomDetail, error)
 	FindRoomMembers(ctx context.Context, roomID string) ([]models.MemberDetail, error)
@@ -337,6 +338,135 @@ func (p *RepositoryRoomImpl) FindRoomByName(ctx context.Context, roomName string
 	}
 
 	return rooms, nil
+}
+
+func (p *RepositoryRoomImpl) FindOneRoomByUserID(ctx context.Context, userID string, roomID string) (*models.Room, error) {
+	query := `
+        SELECT 
+            r.id, 
+            r.room_name, 
+            r.description, 
+            r.room_type, 
+            r.is_private, 
+            r.created_by,
+            r.created_at,
+            r.avatar_url,
+            rm2.user_id AS target_user_id,
+            u.avatar_url,
+            u.username,
+            m.id AS last_message_id,
+            m.content AS last_message_content,
+            m.user_id AS last_message_user_id,
+            m.message_type AS last_message_type,
+            m.timestamp AS last_message_timestamp
+        FROM rooms r
+        JOIN room_members rm ON r.id = rm.room_id
+        LEFT JOIN 
+            room_members rm2
+            ON r.id = rm2.room_id
+            AND r.room_type = 'direct'
+            AND rm2.user_id != rm.user_id
+        LEFT JOIN 
+            users u
+            ON u.id = rm2.user_id
+        LEFT JOIN LATERAL (
+            SELECT id, content, user_id, message_type, timestamp
+            FROM messages
+            WHERE room_id = r.id
+            ORDER BY timestamp DESC
+            LIMIT 1
+        ) m ON true
+        WHERE rm.user_id = $1
+            AND r.id = $2
+        ORDER BY m.timestamp DESC NULLS LAST
+        LIMIT 1
+    `
+
+	row := p.db.QueryRowContext(ctx, query, userID, roomID)
+
+	var room models.Room
+	var avatarUrl sql.NullString
+	var lastMsgID sql.NullString
+	var lastMsgContent sql.NullString
+	var lastMsgUserID sql.NullString
+	var lastMsgType sql.NullString
+	var lastMsgTimestamp sql.NullTime
+	var targetUserID sql.NullString
+	var targetAvatarUrl sql.NullString
+	var username sql.NullString
+	var roomName sql.NullString
+	var description sql.NullString
+
+	err := row.Scan(
+		&room.ID,
+		&roomName,
+		&description,
+		&room.Roomtype,
+		&room.Isprivate,
+		&room.CreatedBy,
+		&room.CreatedAt,
+		&avatarUrl,
+		&targetUserID,
+		&targetAvatarUrl,
+		&username,
+		&lastMsgID,
+		&lastMsgContent,
+		&lastMsgUserID,
+		&lastMsgType,
+		&lastMsgTimestamp,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	// Handle nullable fields
+	if lastMsgType.String == "image" {
+		lastMsgContent.String = "Sent Photo"
+	}
+
+	if targetUserID.Valid {
+		id, _ := uuid.FromString(targetUserID.String)
+		room.TargetUserID = &id
+		room.TargetUsername = &username.String
+		if targetAvatarUrl.Valid {
+			room.TargetAvatarUrl = &targetAvatarUrl.String
+		}
+	}
+
+	if avatarUrl.Valid {
+		room.AvatarUrl = &avatarUrl.String
+	}
+
+	if roomName.Valid {
+		room.Name = roomName.String
+	}
+
+	if description.Valid {
+		room.Description = description.String
+	}
+
+	// Set last message jika ada
+	if lastMsgID.Valid {
+		var senderID *uuid.UUID
+		if lastMsgUserID.Valid {
+			uid, _ := uuid.FromString(lastMsgUserID.String)
+			senderID = &uid
+		}
+		msgID, _ := uuid.FromString(lastMsgID.String)
+		room.LastMessage = &models.Message{
+			ID:        msgID,
+			Content:   lastMsgContent.String,
+			SenderID:  senderID,
+			Type:      lastMsgType.String,
+			Timestamp: lastMsgTimestamp.Time,
+		}
+	}
+
+	return &room, nil
 }
 
 // FindAllRoomByUserID implements RepositoryRoom.

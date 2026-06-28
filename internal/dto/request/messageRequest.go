@@ -59,6 +59,10 @@ func (r *CreateMessageRequest) ToModel(senderID string) (*models.Message, error)
 	}, nil
 }
 
+type EventNewDirectRoom struct {
+	TargetUesrID string `json:"targer_user_id"`
+}
+
 type UpdateMessageRequest struct {
 	Content string `json:"content" binding:"required,min=1"`
 }
