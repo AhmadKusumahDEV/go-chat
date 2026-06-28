@@ -50,7 +50,7 @@ type MemberDetailResponse struct {
 }
 
 type EventNewRoomDirectResponse struct {
-	RoomID string       `json:"room_id"`
-	Type   string       `json:"type"`
-	Data   RoomResponse `json:"data"`
+	RoomID string        `json:"room_id"`
+	Type   string        `json:"type"`
+	Data   *RoomResponse `json:"data"`
 }

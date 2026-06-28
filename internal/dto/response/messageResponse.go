@@ -54,7 +54,7 @@ func NewMessageResponses(msgs []*models.Message) []*MessageResponse {
 
 // MessageListResponse wraps paginated message list with metadata
 type MessageListResponse struct {
-	Data       []*MessageResponse `json:"data"`
+	Data       []*MessageResponse `json:"messages"`
 	HasMore    bool               `json:"has_more"`
 	NextCursor *string            `json:"next_cursor,omitempty"`
 }
