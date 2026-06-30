@@ -400,7 +400,7 @@ func (r *RoomServiceImpl) UpdateAvatar(ctx context.Context, roomID, userID strin
 		return "", fmt.Errorf("failed to upload to storage: %w", err)
 	}
 
-	avatarURL := fmt.Sprintf("/chat-app/%s", objectName)
+	avatarURL := fmt.Sprintf("%s", objectName)
 
 	err = r.roomRepository.UpdateProfilePicture(ctx, roomID, userID, avatarURL)
 	if err != nil {

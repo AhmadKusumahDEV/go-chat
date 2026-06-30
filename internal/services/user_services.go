@@ -257,7 +257,7 @@ func (u *UsersServivesImpl) UpdateAvatar(ctx context.Context, userID string, rea
 	}
 
 	// 2. Build URL
-	avatarURL := fmt.Sprintf("/chat-app/%s", objectName)
+	avatarURL := fmt.Sprintf("%s", objectName)
 
 	// 3. Update DB (rollback MinIO kalau gagal)
 	err = u.userRepository.UpdateAvatar(ctx, userID, avatarURL)
