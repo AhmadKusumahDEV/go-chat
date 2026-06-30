@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
 )
@@ -13,6 +14,7 @@ type RepositoryUser interface {
 	FindByEmail(ctx context.Context, email string) (models.Users, error)
 	FindByProviderID(ctx context.Context, providerName string, providerID string) (*models.Users, error)
 	FindByIDs(ctx context.Context, userIDs []string) ([]models.Users, error)
+	UpdateAvatar(ctx context.Context, userID, avatarURL string) error
 }
 
 type RepositoryUserImpl struct {
@@ -116,6 +118,19 @@ func NewUserRepository(db *sql.DB) RepositoryUser {
 		RepositoryBased: NewBaseRepository[*models.Users](db).(*BaseRepository[*models.Users]),
 		db:              db,
 	}
+}
+
+func (r *RepositoryUserImpl) UpdateAvatar(ctx context.Context, userID, avatarURL string) error {
+	query := `UPDATE users SET avatar_url = $1 WHERE id = $2`
+	result, err := r.db.ExecContext(ctx, query, avatarURL, userID)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return errors.New("user not found")
+	}
+	return nil
 }
 
 var _ RepositoryUser = (*RepositoryUserImpl)(nil)

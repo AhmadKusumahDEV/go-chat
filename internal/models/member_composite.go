@@ -27,6 +27,7 @@ type RoomDetail struct {
 	Name        string         `db:"name"`
 	Description string         `db:"description"`
 	RoomType    string         `db:"room_type"`
+	AvatarUrl   string         `db:"-"`
 	IsPrivate   bool           `db:"is_private"`
 	CreatedAt   time.Time      `db:"created_at"`
 	CreatedBy   uuid.UUID      `db:"created_by"`

@@ -3,7 +3,11 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
+	"path/filepath"
+	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
@@ -22,6 +26,7 @@ type HandlerRoom interface {
 	HandlerDeleteRoom(c *gin.Context)
 	HandleCreateDirectRoom(c *gin.Context)
 	HandleCheckDirectRoom(c *gin.Context)
+	UploadRoomAvatar(c *gin.Context)
 }
 
 type HandlerRoomImpl struct {
@@ -408,5 +413,82 @@ func (r *HandlerRoomImpl) HandleGetRoomDetail(c *gin.Context) {
 		Status:  http.StatusOK,
 		Data:    roomDetail,
 		Message: "success get room detail",
+	})
+}
+
+func (r *HandlerRoomImpl) UploadRoomAvatar(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	roomID := c.Param("id")
+	if _, err := uuid.FromString(roomID); err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid room ID format",
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	fileHeader, err := c.FormFile("avatar")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "avatar file is required",
+		})
+		return
+	}
+
+	contentType := fileHeader.Header.Get("Content-Type")
+	allowedTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/webp": true,
+	}
+	if !allowedTypes[contentType] {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid file type, only jpg/png/webp allowed",
+		})
+		return
+	}
+
+	src, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: "failed to open file",
+		})
+		return
+	}
+	defer src.Close()
+
+	objectName := fmt.Sprintf("rooms/%s/avatar_%d%s",
+		roomID,
+		time.Now().Unix(),
+		filepath.Ext(fileHeader.Filename),
+	)
+
+	avatarURL, err := r.srv.UpdateAvatar(ctx, roomID, userID.(string), src, fileHeader.Size, contentType, objectName)
+	if err != nil {
+		log.Printf("[ERR] Upload room avatar: %v", err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: "failed to upload avatar: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Message: "avatar updated",
+		Data:    avatarURL,
 	})
 }

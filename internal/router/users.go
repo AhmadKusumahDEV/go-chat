@@ -18,8 +18,10 @@ func (r *UsersRoutes) RegisterRoutes(router *gin.Engine, srv *config.Server) {
 	usersgroup.GET("/", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerGetAllUser)
 	usersgroup.GET("/me", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerGetDetailUser)
 	usersgroup.GET("/:id", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerGetUserByID)
-	usersgroup.PATCH("/updated", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerUpdateUser)
 	usersgroup.GET("/refresh", r.handle.HandlerRefresh)
+
+	usersgroup.PATCH("/info", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerUpdateUser)
+	usersgroup.PATCH("/avatar", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.UploadUserAvatar)
 
 	usersgroup.POST("/register", r.handle.HandlerRegister)
 	usersgroup.POST("/login", r.handle.HandlerLogin)

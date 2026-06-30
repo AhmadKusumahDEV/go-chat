@@ -15,7 +15,7 @@ type Room struct {
 	Isprivate       bool       `db:"is_private"`
 	CreatedAt       time.Time  `db:"created_at,auto"`
 	CreatedBy       uuid.UUID  `db:"created_by"`
-	AvatarUrl       *string    `db:"-"`
+	AvatarUrl       *string    `db:"avatar_url"`
 	TargetUserID    *uuid.UUID `db:"-"`
 	TargetUsername  *string    `db:"-"`
 	TargetAvatarUrl *string    `db:"-"`

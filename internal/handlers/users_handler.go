@@ -1,7 +1,11 @@
 package handlers
 
 import (
+	"fmt"
+	"log"
 	"net/http"
+	"path/filepath"
+	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
@@ -20,6 +24,7 @@ type UserHandler interface {
 	HandlerFcmToken(c *gin.Context)
 	HandlerLogout(c *gin.Context)
 	HandlerUpdateUser(c *gin.Context)
+	UploadUserAvatar(c *gin.Context)
 }
 
 type UserHandlerImpl struct {
@@ -323,6 +328,75 @@ func (u *UserHandlerImpl) HandlerLogout(c *gin.Context) {
 		Status:  http.StatusOK,
 		Message: "success logout user",
 		Data:    count,
+	})
+}
+
+func (h *UserHandlerImpl) UploadUserAvatar(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	fileHeader, err := c.FormFile("avatar")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "avatar file is required",
+		})
+		return
+	}
+
+	// Validasi tipe
+	contentType := fileHeader.Header.Get("Content-Type")
+	allowedTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/webp": true,
+	}
+	if !allowedTypes[contentType] {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid file type, only jpg/png/webp allowed",
+		})
+		return
+	}
+
+	src, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: "failed to open file",
+		})
+		return
+	}
+	defer src.Close()
+
+	objectName := fmt.Sprintf("users/%s/avatar_%d%s",
+		userID,
+		time.Now().Unix(),
+		filepath.Ext(fileHeader.Filename),
+	)
+
+	avatarURL, err := h.services.UpdateAvatar(ctx, userID.(string), src, fileHeader.Size, contentType, objectName)
+	if err != nil {
+		log.Printf("[ERR] Upload user avatar: %v", err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: "failed to upload avatar: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Message: "avatar updated",
+		Data:    gin.H{"avatar_url": avatarURL},
 	})
 }
 

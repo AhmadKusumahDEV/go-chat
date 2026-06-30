@@ -118,8 +118,8 @@ func main() {
 	publisher := queue.NewRabbitMQPublisher(rmq.GetChannel())
 
 	// 3. Initialize Services
-	roomServices := services.NewRoomServices(roomRepository, memberRepository, attacmentsRepository, newClientRedis, validate)
-	usersServices := services.NewUsersServices(usersRepository, firebaseRepository, cfg.Jwt)
+	roomServices := services.NewRoomServices(roomRepository, memberRepository, attacmentsRepository, newClientRedis, validate, client)
+	usersServices := services.NewUsersServices(usersRepository, firebaseRepository, cfg.Jwt, client)
 	oauthServices := services.NewOauthServices(cfg, newClientRedis, oauthStatesRepository, usersRepository)
 	messageServices := services.NewMessageServices(messageRepository, memberRepository, client)
 	memberServices := services.NewMemberServices(roomRepository, memberRepository, usersRepository, messageRepository, newClientRedis, validate)

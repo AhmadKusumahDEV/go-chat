@@ -31,6 +31,7 @@ type RoomDetailResponse struct {
 	ID          string                 `json:"id"`
 	Name        string                 `json:"name"`
 	Description string                 `json:"description,omitempty"`
+	Avatar      string                 `json:"avatar"`
 	RoomType    string                 `json:"room_type"`
 	IsPrivate   bool                   `json:"is_private"`
 	CreatedAt   time.Time              `json:"created_at"`

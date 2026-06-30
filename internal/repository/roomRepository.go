@@ -24,6 +24,7 @@ type RepositoryRoom interface {
 	CreateWithMember(ctx context.Context, room *models.Room, members []*models.Members) (uuid.UUID, error)
 	CreateRoomDirect(ctx context.Context, room *models.Room, members []*models.Members, msg *models.Message) error
 	CheckDirectRoom(ctx context.Context, userId string, userTargetId string) (string, error)
+	UpdateProfilePicture(ctx context.Context, roomID, userID, avatarURL string) error
 }
 
 type RepositoryRoomImpl struct {
@@ -215,6 +216,7 @@ func (p *RepositoryRoomImpl) FindRoomDetail(ctx context.Context, roomID string) 
 			r.room_name,
 			r.description,
 			r.room_type,
+			r.avatar_url,
 			r.is_private,
 			r.created_at,
 			r.created_by,
@@ -231,6 +233,7 @@ func (p *RepositoryRoomImpl) FindRoomDetail(ctx context.Context, roomID string) 
 		&room.Name,
 		&room.Description,
 		&room.RoomType,
+		&room.AvatarUrl,
 		&room.IsPrivate,
 		&room.CreatedAt,
 		&room.CreatedBy,
@@ -605,6 +608,19 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 	}
 
 	return rooms, nil
+}
+
+func (p *RepositoryRoomImpl) UpdateProfilePicture(ctx context.Context, roomID, userID, avatarURL string) error {
+	query := `UPDATE rooms SET avatar_url = $1 WHERE id = $2`
+	result, err := p.db.ExecContext(ctx, query, avatarURL, roomID)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return errors.New("room not found")
+	}
+	return nil
 }
 
 var _ RepositoryRoom = (*RepositoryRoomImpl)(nil)

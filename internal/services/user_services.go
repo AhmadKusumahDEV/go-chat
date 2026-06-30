@@ -5,7 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"sync"
+	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/config"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
@@ -13,6 +16,7 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/helpers"
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
+	"github.com/AhmadKusumahDEV/go-chat/pkg/storage"
 	"github.com/gofrs/uuid"
 )
 
@@ -26,11 +30,13 @@ type UsersServices interface {
 	StoreFirebaseToken(ctx context.Context, fcm *request.FcmRequest, userId uuid.UUID) error
 	LogoutUser(ctx context.Context, userId uuid.UUID, installationID string) (int, error)
 	UpdatedUserInfo(ctx context.Context, userId uuid.UUID, req *request.UpdateProfileRequest) error
+	UpdateAvatar(ctx context.Context, userID string, reader io.Reader, size int64, contentType, objectName string) (string, error)
 }
 
 type UsersServivesImpl struct {
 	userRepository     repository.RepositoryUser
 	firebaseRepository repository.RepositoryFirebase
+	minioS3            storage.ObjectStorage
 
 	jwtConfig config.JwtConfig
 }
@@ -243,10 +249,35 @@ func (u *UsersServivesImpl) UpdatedUserInfo(ctx context.Context, userId uuid.UUI
 	return nil
 }
 
-func NewUsersServices(userRepository repository.RepositoryUser, firebase repository.RepositoryFirebase, jwtConfig config.JwtConfig) UsersServices {
+func (u *UsersServivesImpl) UpdateAvatar(ctx context.Context, userID string, reader io.Reader, size int64, contentType, objectName string) (string, error) {
+	// 1. Upload ke MinIO
+	err := u.minioS3.UploadFile(ctx, "chat-app", objectName, reader, size, contentType)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload to storage: %w", err)
+	}
+
+	// 2. Build URL
+	avatarURL := fmt.Sprintf("/chat-app/%s", objectName)
+
+	// 3. Update DB (rollback MinIO kalau gagal)
+	err = u.userRepository.UpdateAvatar(ctx, userID, avatarURL)
+	if err != nil {
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if rmErr := u.minioS3.DeleteObject(rollbackCtx, "chat-app", objectName); rmErr != nil {
+			log.Printf("[ERR] Rollback MinIO failed for user %s: %v", userID, rmErr)
+		}
+		return "", fmt.Errorf("failed to update avatar in db: %w", err)
+	}
+
+	return avatarURL, nil
+}
+
+func NewUsersServices(userRepository repository.RepositoryUser, firebase repository.RepositoryFirebase, jwtConfig config.JwtConfig, minio storage.ObjectStorage) UsersServices {
 	return &UsersServivesImpl{
 		userRepository:     userRepository,
 		firebaseRepository: firebase,
+		minioS3:            minio,
 		jwtConfig:          jwtConfig,
 	}
 }

@@ -3,7 +3,10 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/cahce"
@@ -13,6 +16,7 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
 	"github.com/AhmadKusumahDEV/go-chat/internal/websocket"
+	"github.com/AhmadKusumahDEV/go-chat/pkg/storage"
 	"github.com/go-playground/validator/v10"
 	"github.com/gofrs/uuid"
 )
@@ -28,6 +32,7 @@ type RoomService interface {
 	GetSpecificRoomByUserID(ctx context.Context, userID string, roomID string) (*response.RoomResponse, error)
 	GetRoomByName(ctx context.Context, room_name request.GetRoomByName) ([]*response.RoomResponse, error)
 	GetRoomDetail(ctx context.Context, roomID string, userID string) (*response.RoomDetailResponse, error)
+	UpdateAvatar(ctx context.Context, roomID, userID string, reader io.Reader, size int64, contentType, objectName string) (string, error)
 }
 
 type RoomServiceImpl struct {
@@ -37,15 +42,17 @@ type RoomServiceImpl struct {
 	cahce            cahce.CahceRedis
 	validate         *validator.Validate
 	manager          websocket.WebSocketManager
+	minioS3          storage.ObjectStorage
 }
 
-func NewRoomServices(roomRepository repository.RepositoryRoom, memberRepository repository.RepositoryMembers, att repository.AttachmentsRepository, cahce cahce.CahceRedis, validate *validator.Validate) RoomService {
+func NewRoomServices(roomRepository repository.RepositoryRoom, memberRepository repository.RepositoryMembers, att repository.AttachmentsRepository, cahce cahce.CahceRedis, validate *validator.Validate, minio storage.ObjectStorage) RoomService {
 	return &RoomServiceImpl{
 		roomRepository:   roomRepository,
 		memberRepository: memberRepository,
 		attachment:       att,
 		cahce:            cahce,
 		validate:         validate,
+		minioS3:          minio,
 	}
 }
 
@@ -280,7 +287,7 @@ func (r *RoomServiceImpl) UpdateRoom(ctx context.Context, roomID string, userID 
 
 	existingRoom, err := r.roomRepository.FindByID(ctx, roomID)
 	if err != nil {
-		return err
+		return errors.New("room not found")
 	}
 
 	if req.Name != nil && *req.Name != "" {
@@ -323,11 +330,24 @@ func (r *RoomServiceImpl) GetRoomDetail(ctx context.Context, roomID string, user
 	// 4. Build response
 	memberResponses := make([]response.MemberDetailResponse, 0, len(members))
 	for _, m := range members {
+		var avatarURL *string
+
+		if m.AvatarUrl != nil && !strings.HasPrefix(*m.AvatarUrl, "https://") {
+			s3URL, err := r.minioS3.GetObjectURL(ctx, *m.AvatarUrl, "chat-app")
+			if err != nil {
+				log.Printf("[ERR] Failed to build S3 URL for %s: %v", m.UserID, err)
+			} else {
+				avatarURL = &s3URL
+			}
+		} else {
+			avatarURL = m.AvatarUrl
+		}
+
 		memberResponses = append(memberResponses, response.MemberDetailResponse{
 			UserID:    m.UserID.String(),
 			Username:  m.Username,
 			Email:     m.Email,
-			AvatarUrl: m.AvatarUrl,
+			AvatarUrl: avatarURL,
 			Role:      m.Role,
 			JoinedAt:  m.JoinedAt,
 		})
@@ -338,10 +358,40 @@ func (r *RoomServiceImpl) GetRoomDetail(ctx context.Context, roomID string, user
 		Name:        roomDetail.Name,
 		Description: roomDetail.Description,
 		RoomType:    roomDetail.RoomType,
+		Avatar:      roomDetail.AvatarUrl,
 		IsPrivate:   roomDetail.IsPrivate,
 		CreatedAt:   roomDetail.CreatedAt,
 		CreatedBy:   roomDetail.CreatedBy.String(),
 		MemberCount: roomDetail.MemberCount,
 		Members:     memberResponses,
 	}, nil
+}
+
+func (r *RoomServiceImpl) UpdateAvatar(ctx context.Context, roomID, userID string, reader io.Reader, size int64, contentType, objectName string) (string, error) {
+	member, err := r.memberRepository.FindMember(ctx, roomID, userID)
+	if err != nil {
+		return "", fmt.Errorf("forbidden: you are not a member of this room: %w", err)
+	}
+	if member.Role != "admin" {
+		return "", errors.New("forbidden: only admin can change room avatar")
+	}
+
+	err = r.minioS3.UploadFile(ctx, "chat-app", objectName, reader, size, contentType)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload to storage: %w", err)
+	}
+
+	avatarURL := fmt.Sprintf("/chat-app/%s", objectName)
+
+	err = r.roomRepository.UpdateProfilePicture(ctx, roomID, userID, avatarURL)
+	if err != nil {
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if rmErr := r.minioS3.DeleteObject(rollbackCtx, "chat-app", objectName); rmErr != nil {
+			log.Printf("[ERR] Rollback MinIO failed for room %s: %v", roomID, rmErr)
+		}
+		return "", fmt.Errorf("failed to update avatar in db: %w", err)
+	}
+
+	return avatarURL, nil
 }
