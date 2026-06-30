@@ -264,14 +264,33 @@ func (r *RoomServiceImpl) GetAllRoomUser(ctx context.Context) ([]*response.RoomR
 
 // ListUserRooms implements RoomService.
 func (r *RoomServiceImpl) GetRoomByUserID(ctx context.Context, userID string) ([]*response.RoomResponse, error) {
-	model, err := r.roomRepository.FindAllRoomByUserID(ctx, userID)
-
+	dataRoom, err := r.roomRepository.FindAllRoomByUserID(ctx, userID)
 	if err != nil {
 		log.Println("error on servies layer with name GetRoomByUserID ", err)
 		return nil, err
 	}
 
-	return helpers.RoomResponses(model), nil
+	for _, room := range dataRoom {
+		if room.TargetAvatarUrl != nil && !ChechkPrefixHttps(*room.TargetAvatarUrl) {
+			temp, err := r.minioS3.GetObjectURL(ctx, *room.TargetAvatarUrl, "chat-app")
+			if err != nil {
+				log.Printf("[ERR] Failed to resolve target avatar: %v", err)
+			} else {
+				room.TargetAvatarUrl = &temp
+			}
+		}
+
+		if room.AvatarUrl != nil && !ChechkPrefixHttps(*room.AvatarUrl) {
+			temp, err := r.minioS3.GetObjectURL(ctx, *room.AvatarUrl, "chat-app")
+			if err != nil {
+				log.Printf("[ERR] Failed to resolve avatar: %v", err)
+			} else {
+				room.AvatarUrl = &temp
+			}
+		}
+	}
+
+	return helpers.RoomResponses(dataRoom), nil
 }
 
 // UpdateRoom implements RoomService.
@@ -394,4 +413,11 @@ func (r *RoomServiceImpl) UpdateAvatar(ctx context.Context, roomID, userID strin
 	}
 
 	return avatarURL, nil
+}
+
+func ChechkPrefixHttps(s string) bool {
+	if strings.HasPrefix(s, "https://") {
+		return true
+	}
+	return false
 }
