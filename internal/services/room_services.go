@@ -339,6 +339,15 @@ func (r *RoomServiceImpl) GetRoomDetail(ctx context.Context, roomID string, user
 		return nil, err
 	}
 
+	if roomDetail.AvatarUrl != "" && !ChechkPrefixHttps(roomDetail.AvatarUrl) {
+		temp, err := r.minioS3.GetObjectURL(ctx, roomDetail.AvatarUrl, "chat-app")
+		if err != nil {
+			log.Printf("[ERR] Failed to resolve avatar: %v", err)
+		} else {
+			roomDetail.AvatarUrl = temp
+		}
+	}
+
 	// 3. Get all members with user details
 	members, err := r.roomRepository.FindRoomMembers(ctx, roomID)
 	if err != nil {
