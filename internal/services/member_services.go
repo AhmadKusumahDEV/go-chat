@@ -22,6 +22,9 @@ type MemberService interface {
 	GetMembers(ctx context.Context, roomID string) ([]*response.MemberResponse, error)
 	LeaveRoom(ctx context.Context, roomID string, userID string) error
 	RemoveMember(ctx context.Context, roomID string, targetUserID string, removedByUserID string) error
+	PromoteAdmin(ctx context.Context, roomID, targetUserID, requesterUserID string) error
+	DemoteAdmin(ctx context.Context, roomID, targetUserID, requesterUserID string) error
+	TransferOwnership(ctx context.Context, roomID, fromUserID, toUserID string) error
 }
 
 type MemberServiceImpl struct {
@@ -49,6 +52,122 @@ func NewMemberServices(
 		cahce:             cahce,
 		validate:          validate,
 	}
+}
+
+func (m *MemberServiceImpl) PromoteAdmin(ctx context.Context, roomID, targetUserID, requesterUserID string) error {
+	roomInfo, err := m.roomRepository.FindByID(ctx, roomID)
+	if err != nil {
+		return errors.New("room not found")
+	}
+
+	if roomInfo.Roomtype != "group" {
+		return errors.New("only promote in group")
+	}
+
+	if targetUserID == requesterUserID {
+		return errors.New("canno't promote yourself")
+	}
+
+	adder, err := m.memberRepository.FindMember(ctx, roomID, requesterUserID)
+	if err != nil {
+		return errors.New("forbidden: you are not a member of this room")
+	}
+
+	if adder.Role != "admin" {
+		return errors.New("forbidden: only admin can promote members")
+	}
+
+	target, err := m.memberRepository.FindMember(ctx, roomID, targetUserID)
+	if err != nil {
+		return errors.New("target user is not a member of this room")
+	}
+
+	if target.Role == "admin" {
+		return errors.New("target user is already an admin")
+	}
+
+	return m.memberRepository.UpdateRole(ctx, roomID, targetUserID, "admin")
+}
+
+func (m *MemberServiceImpl) DemoteAdmin(ctx context.Context, roomID, targetUserID, requesterUserID string) error {
+	adder, err := m.memberRepository.FindMember(ctx, roomID, requesterUserID)
+	if err != nil {
+		return errors.New("forbidden: you are not a member of this room")
+	}
+
+	if adder.Role != "admin" {
+		return errors.New("forbidden: only admin can demote members")
+	}
+
+	roomInfo, err := m.roomRepository.FindByID(ctx, roomID)
+	if err != nil {
+		return errors.New("room not found")
+	}
+
+	if roomInfo.CreatedBy == uuid.Nil {
+		return errors.New("room has no creator")
+	}
+
+	if roomInfo.Roomtype != "group" {
+		return errors.New("only demote in group")
+	}
+
+	if roomInfo.CreatedBy != adder.Userid {
+		return errors.New("only origin admin can demote")
+	}
+
+	target, err := m.memberRepository.FindMember(ctx, roomID, targetUserID)
+	if err != nil {
+		return errors.New("target user is not a member of this room")
+	}
+
+	if target.Role != "admin" {
+		return errors.New("target user is not an admin")
+	}
+
+	if requesterUserID == targetUserID {
+		return errors.New("cannot demote yourself, use transfer ownership instead")
+	}
+
+	return m.memberRepository.UpdateRole(ctx, roomID, targetUserID, "member")
+}
+
+func (m *MemberServiceImpl) TransferOwnership(ctx context.Context, roomID, fromUserID, toUserID string) error {
+	room, err := m.roomRepository.FindByID(ctx, roomID)
+	if err != nil {
+		return errors.New("room not found")
+	}
+	log.Println(room.CreatedBy)
+	log.Println(fromUserID)
+
+	if room.CreatedBy.String() != fromUserID {
+		return errors.New("forbidden: only the room creator can transfer ownership")
+	}
+
+	target, err := m.memberRepository.FindMember(ctx, roomID, toUserID)
+	if err != nil {
+		return errors.New("target user is not a member of this room")
+	}
+
+	if target.Role != "admin" {
+		return errors.New("target user must be admin to receive ownership")
+	}
+
+	if fromUserID == toUserID {
+		return errors.New("cannot transfer ownership to yourself")
+	}
+
+	err = m.memberRepository.TransferRole(ctx, roomID, fromUserID, toUserID)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	if m.cahce != nil {
+		_ = m.cahce.Del(ctx, "room:detail:"+roomID)
+		_ = m.cahce.Del(ctx, "room:members:"+roomID)
+	}
+
+	return nil
 }
 
 // AddMember implements MemberService.
@@ -250,18 +369,27 @@ func (m *MemberServiceImpl) LeaveRoom(ctx context.Context, roomID string, userID
 
 // RemoveMember implements MemberService.
 func (m *MemberServiceImpl) RemoveMember(ctx context.Context, roomID string, targetUserID string, removedByUserID string) error {
-	// RBAC: only admin can remove members
 	admin, err := m.memberRepository.FindMember(ctx, roomID, removedByUserID)
 	if err != nil {
 		return errors.New("forbidden: you are not a member of this room")
 	}
+
 	if admin.Role != "admin" {
 		return errors.New("forbidden: only admin can remove members")
 	}
 
+	targetInfo, err := m.memberRepository.FindMember(ctx, roomID, targetUserID)
+	if err != nil {
+		return errors.New("target member not found in this room")
+	}
+
+	if targetInfo.Role == "admin" {
+		return errors.New("cannot remove admin")
+	}
+
 	// Cannot remove yourself via this endpoint
 	if targetUserID == removedByUserID {
-		return errors.New("use leave endpoint to remove yourself")
+		return errors.New("cannot remove yourself")
 	}
 
 	err = m.memberRepository.RemoveMember(ctx, roomID, targetUserID)

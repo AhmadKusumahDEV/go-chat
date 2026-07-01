@@ -14,7 +14,7 @@ type RepositoryUser interface {
 	FindByEmail(ctx context.Context, email string) (models.Users, error)
 	FindByProviderID(ctx context.Context, providerName string, providerID string) (*models.Users, error)
 	FindByIDs(ctx context.Context, userIDs []string) ([]models.Users, error)
-	UpdateAvatar(ctx context.Context, userID, avatarURL string) error
+	ChangeAvatar(ctx context.Context, userID, avatarURL string) error
 }
 
 type RepositoryUserImpl struct {
@@ -120,7 +120,7 @@ func NewUserRepository(db *sql.DB) RepositoryUser {
 	}
 }
 
-func (r *RepositoryUserImpl) UpdateAvatar(ctx context.Context, userID, avatarURL string) error {
+func (r *RepositoryUserImpl) ChangeAvatar(ctx context.Context, userID, avatarURL string) error {
 	query := `UPDATE users SET avatar_url = $1 WHERE id = $2`
 	result, err := r.db.ExecContext(ctx, query, avatarURL, userID)
 	if err != nil {

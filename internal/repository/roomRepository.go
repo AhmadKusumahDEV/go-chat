@@ -491,7 +491,8 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
             m.content AS last_message_content,
             m.user_id AS last_message_user_id,
             m.message_type AS last_message_type,
-            m.timestamp AS last_message_timestamp
+            m.timestamp AS last_message_timestamp,
+			m.username AS last_message_username
         FROM rooms r
         JOIN room_members rm ON r.id = rm.room_id
 		LEFT JOIN 
@@ -503,8 +504,9 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 			users u
 			ON u.id = rm2.user_id
         LEFT JOIN LATERAL (
-            SELECT id, content, user_id, message_type, timestamp
-            FROM messages
+            SELECT msg.id, msg.content, msg.user_id, msg.message_type, msg.timestamp, u_msg.username
+            FROM messages msg
+			LEFT JOIN users u_msg ON msg.user_id = u_msg.id
             WHERE room_id = r.id
             ORDER BY timestamp DESC
             LIMIT 1
@@ -529,6 +531,7 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 		var lastMsgUserID sql.NullString
 		var lastMsgType sql.NullString
 		var lastMsgTimestamp sql.NullTime
+		var lastMessageUsername sql.NullString
 		var targetUserID sql.NullString
 		var targetAvatarUrl sql.NullString
 		var username sql.NullString
@@ -552,6 +555,7 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 			&lastMsgUserID,
 			&lastMsgType,
 			&lastMsgTimestamp,
+			&lastMessageUsername,
 		); err != nil {
 			return nil, err
 		}
@@ -585,18 +589,24 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 		// ✅ Set last message jika ada
 		if lastMsgID.Valid {
 			var userID *uuid.UUID
+			var username string
 			if lastMsgUserID.Valid {
 				uid, _ := uuid.FromString(lastMsgUserID.String)
 				userID = &uid
 			}
 
+			if lastMessageUsername.Valid {
+				username = lastMessageUsername.String
+			}
+
 			msgID, _ := uuid.FromString(lastMsgID.String)
 			room.LastMessage = &models.Message{
-				ID:        msgID,
-				Content:   lastMsgContent.String,
-				SenderID:  userID,
-				Type:      lastMsgType.String,
-				Timestamp: lastMsgTimestamp.Time,
+				ID:         msgID,
+				Content:    lastMsgContent.String,
+				SenderID:   userID,
+				SenderName: username,
+				Type:       lastMsgType.String,
+				Timestamp:  lastMsgTimestamp.Time,
 			}
 		}
 

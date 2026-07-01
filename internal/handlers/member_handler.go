@@ -17,6 +17,9 @@ type HandlerMember interface {
 	HandleGetMembers(c *gin.Context)
 	HandleLeaveRoom(c *gin.Context)
 	HandleRemoveMember(c *gin.Context)
+	HandlePromoteAdmin(c *gin.Context)
+	HandleDemoteAdmin(c *gin.Context)
+	HanleTransferOwnership(c *gin.Context)
 }
 
 type HandlerMemberImpl struct {
@@ -24,7 +27,150 @@ type HandlerMemberImpl struct {
 }
 
 func NewMemberHandler(srv services.MemberService) HandlerMember {
-	return &HandlerMemberImpl{srv: srv}
+	return &HandlerMemberImpl{
+		srv: srv,
+	}
+}
+
+func (h *HandlerMemberImpl) HandlePromoteAdmin(c *gin.Context) {
+	roomID := c.Param("room_id")
+
+	_, err := uuid.FromString(roomID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "room tidak valid",
+		})
+		return
+	}
+
+	var req request.ManageMemberRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "format JSON tidak valid",
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
+		return
+	}
+
+	err = h.srv.PromoteAdmin(c.Request.Context(), roomID, req.TargetUserID, userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Message: "success",
+		Data:    nil,
+	})
+}
+
+func (h *HandlerMemberImpl) HandleDemoteAdmin(c *gin.Context) {
+	roomID := c.Param("room_id")
+
+	_, err := uuid.FromString(roomID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "room tidak valid",
+		})
+		return
+	}
+
+	var req request.ManageMemberRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "format JSON tidak valid",
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
+		return
+	}
+
+	err = h.srv.DemoteAdmin(c.Request.Context(), roomID, req.TargetUserID, userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, response.ApiResponse{
+		Status:  http.StatusAccepted,
+		Message: "success",
+		Data:    nil,
+	})
+}
+
+func (h *HandlerMemberImpl) HanleTransferOwnership(c *gin.Context) {
+	roomID := c.Param("room_id")
+
+	_, err := uuid.FromString(roomID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "room tidak valid",
+		})
+		return
+	}
+
+	var req request.ManageMemberRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "format JSON tidak valid",
+		})
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
+		return
+	}
+
+	err = h.srv.TransferOwnership(c.Request.Context(), roomID, userID.(string), req.TargetUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+			Data:    nil,
+		})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, response.ApiResponse{
+		Status:  http.StatusAccepted,
+		Message: "success",
+		Data:    nil,
+	})
 }
 
 // HandleAddMember implements HandlerMember.

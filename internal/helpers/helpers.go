@@ -198,15 +198,21 @@ func RoomResponse(room *models.Room) *response.RoomResponse {
 
 	if room.LastMessage != nil {
 		var userID *string
+		var username string
 		if room.LastMessage.SenderID != nil {
 			uid := room.LastMessage.SenderID.String()
 			userID = &uid
+		}
+
+		if room.LastMessage.SenderName != "" {
+			username = room.LastMessage.SenderName
 		}
 
 		resp.LastMessage = &response.LastMessageResponse{
 			ID:          room.LastMessage.ID.String(),
 			Content:     room.LastMessage.Content,
 			UserID:      userID,
+			UserName:    &username,
 			MessageType: room.LastMessage.Type,
 			Timestamp:   room.LastMessage.Timestamp,
 		}

@@ -11,3 +11,7 @@ type AddMemberRequest struct {
 	RoomID      string   `json:"room_id" validate:"required"`
 	AddMemberBy string   `json:"added_by" validate:"required"`
 }
+
+type ManageMemberRequest struct {
+	TargetUserID string `json:"target_user_id" binding:"required,uuid"`
+}

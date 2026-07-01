@@ -22,6 +22,7 @@ type LastMessageResponse struct {
 	ID          string    `json:"id"`
 	Content     string    `json:"content"`
 	UserID      *string   `json:"user_id,omitempty"`
+	UserName    *string   `json:"user_name,omitempty"`
 	MessageType string    `json:"message_type"`
 	Timestamp   time.Time `json:"timestamp"`
 }

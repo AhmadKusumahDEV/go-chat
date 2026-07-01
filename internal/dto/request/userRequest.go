@@ -14,8 +14,8 @@ type LoginRequest struct {
 
 // UpdateProfileRequest (Opsional: Jika nanti user ingin ganti username)
 type UpdateProfileRequest struct {
-	Username string `json:"username" binding:"omitempty,min=3,max=50"`
-	About    string `json:"about" binding:"omitempty,max=500"`
+	Username *string `json:"username" binding:"omitempty,min=3,max=50"`
+	About    *string `json:"about" binding:"omitempty,max=500"`
 }
 
 type RefreshRequest struct {

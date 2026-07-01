@@ -165,6 +165,13 @@ func (u *UsersServivesImpl) RegisterUser(ctx context.Context, req *request.Regis
 func (u *UsersServivesImpl) GetAllUser(ctx context.Context) ([]*response.UserResponse, error) {
 	users, err := u.userRepository.FindAll(ctx)
 
+	for _, user := range users {
+		if user.AvatarUrl.Valid && !ChechkPrefixHttps(user.AvatarUrl.String) {
+			result, _ := u.minioS3.GetObjectURL(ctx, user.AvatarUrl.String, "chat-app")
+			user.AvatarUrl.String = result
+		}
+	}
+
 	userConvert := helpers.UserResponses(users)
 
 	if err != nil {
@@ -178,6 +185,11 @@ func (u *UsersServivesImpl) GetDetailUser(ctx context.Context, userId uuid.UUID)
 	user, err := u.userRepository.FindByID(ctx, userId)
 	if err != nil {
 		return nil, errors.New("user not found")
+	}
+
+	if user.AvatarUrl.Valid && !ChechkPrefixHttps(user.AvatarUrl.String) {
+		result, _ := u.minioS3.GetObjectURL(ctx, user.AvatarUrl.String, "chat-app")
+		user.AvatarUrl.String = result
 	}
 
 	return helpers.UserResponse(user), nil
@@ -232,18 +244,18 @@ func (u *UsersServivesImpl) UpdatedUserInfo(ctx context.Context, userId uuid.UUI
 		return errors.New("user not found")
 	}
 
-	if req.Username != "" {
-		userinfo.Username = req.Username
+	if req.Username != nil {
+		userinfo.Username = *req.Username
 	}
 
-	if req.About != "" {
-		userinfo.About.String = req.About
+	if req.About != nil {
+		userinfo.About.String = *req.About
 		userinfo.About.Valid = true
 	}
 
 	err = u.userRepository.Update(ctx, userinfo)
 	if err != nil {
-		return errors.New(err.Error())
+		return errors.New("tidak dapat melakukan updated user data tidak valid")
 	}
 
 	return nil
@@ -260,7 +272,7 @@ func (u *UsersServivesImpl) UpdateAvatar(ctx context.Context, userID string, rea
 	avatarURL := fmt.Sprintf("%s", objectName)
 
 	// 3. Update DB (rollback MinIO kalau gagal)
-	err = u.userRepository.UpdateAvatar(ctx, userID, avatarURL)
+	err = u.userRepository.ChangeAvatar(ctx, userID, avatarURL)
 	if err != nil {
 		rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

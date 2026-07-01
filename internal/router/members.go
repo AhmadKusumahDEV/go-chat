@@ -20,6 +20,10 @@ func (r *MemberRoutes) RegisterRoutes(router *gin.Engine, srv *config.Server) {
 	membergroup.POST("/add", r.handle.HandleAddMember)
 	membergroup.DELETE("/:room_id/leave", r.handle.HandleLeaveRoom)
 	membergroup.DELETE("/:room_id/remove", r.handle.HandleRemoveMember)
+
+	membergroup.PATCH("/promote/:room_id", r.handle.HandlePromoteAdmin)
+	membergroup.PATCH("/demote/:room_id", r.handle.HandleDemoteAdmin)
+	membergroup.PATCH("/transfer/:room_id", r.handle.HanleTransferOwnership)
 }
 
 func NewMemberRouter(handler handlers.HandlerMember) config.RouteRegistrar {

@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"log"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
 )
@@ -14,6 +16,8 @@ type RepositoryMembers interface {
 	FindMember(ctx context.Context, roomID string, userID string) (*models.Members, error)
 	RemoveMember(ctx context.Context, roomID string, userID string) error
 	GetRoomMemberIDs(ctx context.Context, roomID string) ([]string, error)
+	UpdateRole(ctx context.Context, roomID, targetID, role string) error
+	TransferRole(ctx context.Context, roomID, fromUserID, toUserID string) error
 }
 
 type RepositoryMemberImpl struct {
@@ -26,6 +30,72 @@ func NewMemberRepository(db *sql.DB) RepositoryMembers {
 		BaseRepository: NewBaseRepository[*models.Members](db).(*BaseRepository[*models.Members]),
 		db:             db,
 	}
+}
+
+func (r *RepositoryMemberImpl) TransferRole(ctx context.Context, roomID, fromUserID, toUserID string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		log.Println(err)
+		return errors.New("failed init for save transfer role")
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	_, err = tx.ExecContext(ctx, `
+        UPDATE room_members 
+        SET role = 'member' 
+        WHERE room_id = $1 AND user_id = $2
+    `, roomID, fromUserID)
+	if err != nil {
+		log.Println(err)
+		return errors.New("failed update user role to member")
+	}
+
+	_, err = tx.ExecContext(ctx, `
+        UPDATE room_members 
+        SET role = 'admin' 
+        WHERE room_id = $1 AND user_id = $2
+    `, roomID, toUserID)
+	if err != nil {
+		log.Println(err)
+		return errors.New("failed update user role to admin")
+	}
+
+	res, err := tx.ExecContext(ctx, `
+        UPDATE rooms 
+        SET created_by = $1 
+        WHERE id = $2
+    `, toUserID, roomID)
+	if err != nil {
+		log.Println(err)
+		return errors.New("failed update room creator")
+	}
+
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return errors.New("room not found during transfer")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return errors.New("failed to save data")
+	}
+	committed = true
+	return nil
+}
+
+func (r *RepositoryMemberImpl) UpdateRole(ctx context.Context, roomID, targetID, role string) error {
+	query := `UPDATE room_members SET role = $1 WHERE room_id = $2 AND user_id = $3`
+	_, err := r.db.ExecContext(ctx, query, role, roomID, targetID)
+	if err != nil {
+		log.Println(err)
+		return errors.New("failed promote role")
+	}
+	return nil
 }
 
 // FindMember implements RepositoryMembers.
