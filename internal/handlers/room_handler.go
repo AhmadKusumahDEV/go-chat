@@ -65,10 +65,13 @@ func (r *HandlerRoomImpl) HandleCheckDirectRoom(c *gin.Context) {
 			return
 		}
 		if !res {
-			c.JSON(http.StatusNotFound, response.ApiResponse{
-				Status:  http.StatusNotFound,
-				Message: err.Error(),
-				Data:    false,
+			c.JSON(http.StatusOK, response.ApiResponse{
+				Status: http.StatusOK,
+				Data: gin.H{
+					"id":    id,
+					"found": res,
+				},
+				Message: "success",
 			})
 			return
 		}
