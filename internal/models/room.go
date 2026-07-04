@@ -1,6 +1,7 @@
 package models
 
 import (
+	"database/sql"
 	"errors"
 	"time"
 
@@ -8,18 +9,18 @@ import (
 )
 
 type Room struct {
-	ID              uuid.UUID  `db:"id,pk,auto"` // pk=primary key, auto=auto increment
-	Name            string     `db:"room_name"`
-	Roomtype        string     `db:"room_type"`
-	Description     string     `db:"description"`
-	Isprivate       bool       `db:"is_private"`
-	CreatedAt       time.Time  `db:"created_at,auto"`
-	CreatedBy       uuid.UUID  `db:"created_by"`
-	AvatarUrl       *string    `db:"avatar_url"`
-	TargetUserID    *uuid.UUID `db:"-"`
-	TargetUsername  *string    `db:"-"`
-	TargetAvatarUrl *string    `db:"-"`
-	LastMessage     *Message   `db:"-"`
+	ID              uuid.UUID      `db:"id,pk,auto"` // pk=primary key, auto=auto increment
+	Name            string         `db:"room_name"`
+	Roomtype        string         `db:"room_type"`
+	Description     string         `db:"description"`
+	Isprivate       bool           `db:"is_private"`
+	CreatedAt       time.Time      `db:"created_at,auto"`
+	CreatedBy       uuid.UUID      `db:"created_by"`
+	AvatarUrl       sql.NullString `db:"avatar_url"`
+	TargetUserID    *uuid.UUID     `db:"-"`
+	TargetUsername  *string        `db:"-"`
+	TargetAvatarUrl *string        `db:"-"`
+	LastMessage     *Message       `db:"-"`
 }
 
 func (u *Room) GetID() any        { return u.ID }

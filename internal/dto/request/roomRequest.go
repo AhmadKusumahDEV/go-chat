@@ -1,6 +1,7 @@
 package request
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -30,9 +31,12 @@ func (r *CreateRoomRequest) ToModel(id string) (*models.Room, error) {
 		Description: r.Description,
 		Roomtype:    r.RoomType,
 		Isprivate:   *r.IsPrivate,
-		AvatarUrl:   &defaultAvatar,
-		CreatedBy:   strToUuid,
-		CreatedAt:   currentDate,
+		AvatarUrl: sql.NullString{
+			String: defaultAvatar,
+			Valid:  true,
+		},
+		CreatedBy: strToUuid,
+		CreatedAt: currentDate,
 	}, nil
 }
 

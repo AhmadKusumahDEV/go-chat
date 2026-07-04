@@ -280,12 +280,13 @@ func (r *RoomServiceImpl) GetRoomByUserID(ctx context.Context, userID string) ([
 			}
 		}
 
-		if room.AvatarUrl != nil && !ChechkPrefixHttps(*room.AvatarUrl) {
-			temp, err := r.minioS3.GetObjectURL(ctx, *room.AvatarUrl, "chat-app")
+		if room.AvatarUrl.Valid && !ChechkPrefixHttps(room.AvatarUrl.String) {
+			temp, err := r.minioS3.GetObjectURL(ctx, room.AvatarUrl.String, "chat-app")
 			if err != nil {
 				log.Printf("[ERR] Failed to resolve avatar: %v", err)
 			} else {
-				room.AvatarUrl = &temp
+				room.AvatarUrl.String = temp
+				room.AvatarUrl.Valid = true
 			}
 		}
 	}
@@ -304,14 +305,22 @@ func (r *RoomServiceImpl) UpdateRoom(ctx context.Context, roomID string, userID 
 		return errors.New("forbidden: only admin can update room settings")
 	}
 
-	_, err = r.roomRepository.FindByID(ctx, roomID)
+	existingRoom, err := r.roomRepository.FindByID(ctx, roomID)
 	if err != nil {
 		return errors.New("room not found")
 	}
 
-	err = r.roomRepository.UpdatedProfileInfo(ctx, roomID, *req.Name, *req.Description)
+	if req.Name != nil && *req.Name != "" {
+		existingRoom.Name = *req.Name
+	}
+
+	if req.Description != nil && *req.Description != "" {
+		existingRoom.Description = *req.Description
+	}
+
+	err = r.roomRepository.UpdatedProfileInfo(ctx, roomID, existingRoom.Name, existingRoom.Description)
 	if err != nil {
-		return errors.New("terjadi kesalahan saat melakukan updated room")
+		return err
 	}
 
 	return nil

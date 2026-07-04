@@ -188,8 +188,8 @@ func RoomResponse(room *models.Room) *response.RoomResponse {
 		resp.TargetUserID = &targetIDStr
 	}
 
-	if room.AvatarUrl != nil {
-		resp.AvatarUrl = room.AvatarUrl
+	if room.AvatarUrl.Valid {
+		resp.AvatarUrl = &room.AvatarUrl.String
 	}
 
 	if room.Roomtype == "direct" {

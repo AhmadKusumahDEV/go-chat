@@ -450,7 +450,8 @@ func (p *RepositoryRoomImpl) FindOneRoomByUserID(ctx context.Context, userID str
 	}
 
 	if avatarUrl.Valid {
-		room.AvatarUrl = &avatarUrl.String
+		room.AvatarUrl.String = avatarUrl.String
+		room.AvatarUrl.Valid = true
 	}
 
 	if roomName.Valid {
@@ -584,7 +585,8 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 		}
 
 		if avatarUrl.Valid {
-			room.AvatarUrl = &avatarUrl.String
+			room.AvatarUrl.String = avatarUrl.String
+			room.AvatarUrl.Valid = true
 		}
 
 		if roomName.Valid {
@@ -642,8 +644,8 @@ func (p *RepositoryRoomImpl) UpdateProfilePicture(ctx context.Context, roomID, u
 	return nil
 }
 
-func (p *RepositoryRoomImpl) UpdatedProfileInfo(ctx context.Context, roomID, roomName, description string) error {
-	query := `UPDATE rooms SET name = $1, description = $2 WHERE id = $3`
+func (p *RepositoryRoomImpl) UpdatedProfileInfo(ctx context.Context, roomID string, roomName string, description string) error {
+	query := `UPDATE rooms SET room_name = $1, description = $2 WHERE id = $3`
 	result, err := p.db.ExecContext(ctx, query, roomName, description, roomID)
 	if err != nil {
 		return err
