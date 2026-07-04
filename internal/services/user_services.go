@@ -269,7 +269,7 @@ func (u *UsersServivesImpl) UpdateAvatar(ctx context.Context, userID string, rea
 	}
 
 	// 2. Build URL
-	avatarURL := fmt.Sprintf("%s", objectName)
+	avatarURL, _ := u.minioS3.GetObjectURL(ctx, objectName, "chat-app")
 
 	// 3. Update DB (rollback MinIO kalau gagal)
 	err = u.userRepository.ChangeAvatar(ctx, userID, avatarURL)

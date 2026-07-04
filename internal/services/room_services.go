@@ -409,7 +409,7 @@ func (r *RoomServiceImpl) UpdateAvatar(ctx context.Context, roomID, userID strin
 		return "", fmt.Errorf("failed to upload to storage: %w", err)
 	}
 
-	avatarURL := fmt.Sprintf("%s", objectName)
+	avatarURL, _ := r.minioS3.GetObjectURL(ctx, objectName, "chat-app")
 
 	err = r.roomRepository.UpdateProfilePicture(ctx, roomID, userID, avatarURL)
 	if err != nil {

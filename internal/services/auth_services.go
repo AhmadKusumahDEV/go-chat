@@ -263,7 +263,9 @@ func (o *OauthServicesImpl) findOrCreateGitHubUser(ctx context.Context, userInfo
 
 		existingUser.ProviderName = sql.NullString{String: "github", Valid: true}
 		existingUser.ProviderID = sql.NullString{String: oauthID, Valid: true}
-		existingUser.AvatarUrl = sql.NullString{String: userInfo.AvatarURL, Valid: true}
+		if !existingUser.AvatarUrl.Valid {
+			existingUser.AvatarUrl = sql.NullString{String: userInfo.AvatarURL, Valid: true}
+		}
 		if existingUser.Username == "" {
 			existingUser.Username = userInfo.Login
 		}
@@ -471,7 +473,9 @@ func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo
 
 		existingUser.ProviderName = sql.NullString{String: "google", Valid: true}
 		existingUser.ProviderID = sql.NullString{String: oauthID, Valid: true}
-		existingUser.AvatarUrl = sql.NullString{String: userInfo.AvatarURL, Valid: true}
+		if !existingUser.AvatarUrl.Valid {
+			existingUser.AvatarUrl = sql.NullString{String: userInfo.AvatarURL, Valid: true}
+		}
 		if existingUser.Username == "" {
 			existingUser.Username = userInfo.Name
 		}
