@@ -304,21 +304,14 @@ func (r *RoomServiceImpl) UpdateRoom(ctx context.Context, roomID string, userID 
 		return errors.New("forbidden: only admin can update room settings")
 	}
 
-	existingRoom, err := r.roomRepository.FindByID(ctx, roomID)
+	_, err = r.roomRepository.FindByID(ctx, roomID)
 	if err != nil {
 		return errors.New("room not found")
 	}
 
-	if req.Name != nil && *req.Name != "" {
-		existingRoom.Name = *req.Name
-	}
-
-	if req.Description != nil && *req.Description != "" {
-		existingRoom.Description = *req.Description
-	}
-
-	if err := r.roomRepository.Update(ctx, existingRoom); err != nil {
-		return err
+	err = r.roomRepository.UpdatedProfileInfo(ctx, roomID, *req.Name, *req.Description)
+	if err != nil {
+		return errors.New("terjadi kesalahan saat melakukan updated room")
 	}
 
 	return nil

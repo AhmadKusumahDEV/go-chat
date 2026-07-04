@@ -25,6 +25,7 @@ type RepositoryRoom interface {
 	CreateRoomDirect(ctx context.Context, room *models.Room, members []*models.Members, msg *models.Message) error
 	CheckDirectRoom(ctx context.Context, userId string, userTargetId string) (string, error)
 	UpdateProfilePicture(ctx context.Context, roomID, userID, avatarURL string) error
+	UpdatedProfileInfo(ctx context.Context, roomID, roomName, description string) error
 }
 
 type RepositoryRoomImpl struct {
@@ -228,17 +229,25 @@ func (p *RepositoryRoomImpl) FindRoomDetail(ctx context.Context, roomID string) 
 	`
 
 	var room models.RoomDetail
+	avatarUrl := sql.NullString{}
 	err := p.db.QueryRowContext(ctx, query, roomID).Scan(
 		&room.ID,
 		&room.Name,
 		&room.Description,
 		&room.RoomType,
-		&room.AvatarUrl,
+		&avatarUrl,
 		&room.IsPrivate,
 		&room.CreatedAt,
 		&room.CreatedBy,
 		&room.MemberCount,
 	)
+
+	room.AvatarUrl = fmt.Sprintf("https://api.dicebear.com/10.x/initials/png?seed=%s", room.Name)
+
+	if avatarUrl.Valid {
+		room.AvatarUrl = avatarUrl.String
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -623,6 +632,19 @@ func (p *RepositoryRoomImpl) FindAllRoomByUserID(ctx context.Context, userID str
 func (p *RepositoryRoomImpl) UpdateProfilePicture(ctx context.Context, roomID, userID, avatarURL string) error {
 	query := `UPDATE rooms SET avatar_url = $1 WHERE id = $2`
 	result, err := p.db.ExecContext(ctx, query, avatarURL, roomID)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return errors.New("room not found")
+	}
+	return nil
+}
+
+func (p *RepositoryRoomImpl) UpdatedProfileInfo(ctx context.Context, roomID, roomName, description string) error {
+	query := `UPDATE rooms SET name = $1, description = $2 WHERE id = $3`
+	result, err := p.db.ExecContext(ctx, query, roomName, description, roomID)
 	if err != nil {
 		return err
 	}

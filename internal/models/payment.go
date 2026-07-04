@@ -1,7 +1,9 @@
 package models
 
+type paymentStatus string
+
 const (
-	PaymentStatusPending = "pending"
-	PaymentStatusSuccess = "success"
-	PaymentStatusFailed  = "failed"
+	PaymentStatusPending paymentStatus = "pending"
+	PaymentStatusSuccess paymentStatus = "success"
+	PaymentStatusFailed  paymentStatus = "failed"
 )
