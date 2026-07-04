@@ -396,7 +396,7 @@ func (h *UserHandlerImpl) UploadUserAvatar(c *gin.Context) {
 	c.JSON(http.StatusOK, response.ApiResponse{
 		Status:  http.StatusOK,
 		Message: "avatar updated",
-		Data:    gin.H{"avatar_url": avatarURL},
+		Data:    avatarURL,
 	})
 }
 
