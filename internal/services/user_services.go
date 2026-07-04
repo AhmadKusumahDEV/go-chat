@@ -201,6 +201,11 @@ func (u *UsersServivesImpl) GetUserByID(ctx context.Context, userId uuid.UUID) (
 		return nil, errors.New("user not found")
 	}
 
+	if user.AvatarUrl.Valid && !ChechkPrefixHttps(user.AvatarUrl.String) {
+		result, _ := u.minioS3.GetObjectURL(ctx, user.AvatarUrl.String, "chat-app")
+		user.AvatarUrl.String = result
+	}
+
 	return helpers.UserResponse(user), nil
 }
 
