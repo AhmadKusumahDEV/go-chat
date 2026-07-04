@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -448,7 +447,9 @@ func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo
 
 	user, err := o.userRepo.FindByProviderID(ctx, "google", oauthID)
 	if err == nil {
-		user.AvatarUrl = sql.NullString{String: userInfo.AvatarURL, Valid: true}
+		if !user.AvatarUrl.Valid || user.AvatarUrl.String == "" {
+			user.AvatarUrl = sql.NullString{String: userInfo.AvatarURL, Valid: true}
+		}
 		if user.Username == "" {
 			user.Username = userInfo.Name
 		}
@@ -475,7 +476,6 @@ func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo
 		existingUser.ProviderName = sql.NullString{String: "google", Valid: true}
 		existingUser.ProviderID = sql.NullString{String: oauthID, Valid: true}
 		if !existingUser.AvatarUrl.Valid || existingUser.AvatarUrl.String == "" {
-			log.Println("avatar url:", userInfo.AvatarURL)
 			existingUser.AvatarUrl = sql.NullString{String: userInfo.AvatarURL, Valid: true}
 		}
 		if existingUser.Username == "" {
