@@ -37,6 +37,7 @@ type Cfg struct {
 	OAuth       OAuthConfig    `mapstructure:"oauth"`
 	Firebase    FirebaseConfig `mapstructure:"firebase"`
 	Minio       MinoConfig     `mapstructure:"minio"`
+	Payment     PaymentConfig  `mapstructure:"payment"`
 }
 
 func LoadConfig() (config Cfg, err error) {

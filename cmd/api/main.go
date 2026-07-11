@@ -17,6 +17,7 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/services"
 	"github.com/AhmadKusumahDEV/go-chat/internal/websocket"
 	"github.com/AhmadKusumahDEV/go-chat/internal/worker"
+	"github.com/AhmadKusumahDEV/go-chat/pkg/httpclient"
 	"github.com/AhmadKusumahDEV/go-chat/pkg/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -66,6 +67,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	httpClient := httpclient.NewStdHTTPClient()
 
 	err = client.Ping(appContext)
 	log.Println(err)
@@ -113,6 +115,7 @@ func main() {
 	messageRepository := repository.NewMessageRepository(db)
 	firebaseRepository := repository.NewFirebaseRepository(db)
 	attacmentsRepository := repository.NewAttachmentsRepository(db)
+	orderRepository := repository.NewOrderRepository(db)
 
 	// 2. Initialize Queue Publisher
 	publisher := queue.NewRabbitMQPublisher(rmq.GetChannel())
@@ -123,6 +126,7 @@ func main() {
 	oauthServices := services.NewOauthServices(cfg, newClientRedis, oauthStatesRepository, usersRepository)
 	messageServices := services.NewMessageServices(messageRepository, memberRepository, client)
 	memberServices := services.NewMemberServices(roomRepository, memberRepository, usersRepository, messageRepository, newClientRedis, validate)
+	orderServices := services.NewOrderServices(cfg, usersRepository, httpClient, orderRepository, rds)
 
 	manager := websocket.NewWebSocketManager(messageServices, roomServices, publisher)
 	manager.Start()
@@ -141,6 +145,7 @@ func main() {
 	messageHandler := handlers.NewMessageHandler(messageServices, uploadworker, cfg, rds)
 	memberHandler := handlers.NewMemberHandler(memberServices)
 	testPushHandler := handlers.NewTestPushNotificationHandler(fcmClient, firebaseRepository, roomRepository)
+	orderHandler := handlers.NewOrderHandler(orderServices)
 
 	// router
 	roomRouter := router.NewRoomRouter(roomHandler)
@@ -148,6 +153,7 @@ func main() {
 	authRouter := router.NewAuthRouter(oauthHandler)
 	messageRouter := router.NewMessageRouter(messageHandler)
 	memberRouter := router.NewMemberRouter(memberHandler)
+	orderRouter := router.NewOrderRouter(orderHandler)
 	testPushRouter := handlers.NewTestPushRouter(testPushHandler)
 
 	if err != nil {
@@ -168,7 +174,7 @@ func main() {
 		})
 	})
 
-	server.RegisterRoutes(roomRouter, UsersRouter, wsRouter, authRouter, messageRouter, memberRouter, testPushRouter)
+	server.RegisterRoutes(roomRouter, UsersRouter, wsRouter, authRouter, messageRouter, memberRouter, testPushRouter, orderRouter)
 
 	err = server.Start()
 

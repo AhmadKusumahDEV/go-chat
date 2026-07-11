@@ -472,7 +472,7 @@ func (o *OauthServicesImpl) findOrCreateGoogleUser(ctx context.Context, userInfo
 			return nil, fmt.Errorf("email %s is already registered with %s. Please login with %s instead.",
 				userInfo.Email, existingUser.ProviderName.String, existingUser.ProviderName.String)
 		}
-
+		// case condition when user already register without oauth 2.0 method and then want register with oauth 2.0
 		existingUser.ProviderName = sql.NullString{String: "google", Valid: true}
 		existingUser.ProviderID = sql.NullString{String: oauthID, Valid: true}
 		if !existingUser.AvatarUrl.Valid || existingUser.AvatarUrl.String == "" {
