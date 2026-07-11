@@ -12,7 +12,7 @@ RUN go mod download
 COPY . .
 
 # Build the job worker
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o worker ./cmd/job
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o worker ./cmd/worker-notifiaction
 
 # Final stage
 FROM alpine:latest
