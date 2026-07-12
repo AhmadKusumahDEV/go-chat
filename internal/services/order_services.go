@@ -3,8 +3,11 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/sha512"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,8 +25,8 @@ import (
 )
 
 type OrderServices interface {
-	GetSnapToken(userId string) (string, error)
-	MidtransNotification(req map[string]interface{})
+	GetTransactionList(ctx context.Context, userId string) ([]*response.OrderResponse, error)
+	MidtransNotification(ctx context.Context, notif *response.MidtransNotification) error
 	AddOrder(ctx context.Context, userId string) (*response.SnapResponse, error)
 }
 
@@ -36,7 +39,7 @@ type OrderServicesImpl struct {
 }
 
 // AddOrder implements [OrderServices].
-func (o OrderServicesImpl) AddOrder(ctx context.Context, userId string) (*response.SnapResponse, error) {
+func (o *OrderServicesImpl) AddOrder(ctx context.Context, userId string) (*response.SnapResponse, error) {
 	keyLock := fmt.Sprintf("create_order:lock:%s", userId)
 
 	lockStat, err := o.rds.SetNX(ctx, keyLock, "1", 10*time.Second).Result()
@@ -98,7 +101,7 @@ func (o OrderServicesImpl) AddOrder(ctx context.Context, userId string) (*respon
 	err = o.OrderRepository.CreateOrder(ctx, &models.Order{
 		OrderID:   orderId,
 		UserID:    user.ID,
-		Plan:      "premium",
+		Plan:      "Subscription Premium",
 		Amount:    req.TransactionInfo.GrossAmount,
 		Status:    "pending",
 		Gateway:   "midtrans",
@@ -117,13 +120,101 @@ func (o OrderServicesImpl) AddOrder(ctx context.Context, userId string) (*respon
 }
 
 // GetSnapToken implements [OrderServices].
-func (o OrderServicesImpl) GetSnapToken(userId string) (string, error) {
-	panic("unimplemented")
+func (o *OrderServicesImpl) GetTransactionList(ctx context.Context, userId string) ([]*response.OrderResponse, error) {
+	transaction, err := o.OrderRepository.GetOrderByUserId(ctx, userId)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	var result []*response.OrderResponse
+	for _, v := range transaction {
+		if v.Status == "pending" && time.Now().After(v.ExpiretAt) {
+			v.Status = "expired"
+		}
+
+		resp := &response.OrderResponse{
+			OrderId:   v.OrderID,
+			Plan:      v.Plan,
+			Amount:    v.Amount,
+			Status:    v.Status,
+			ExpiretAt: v.ExpiretAt,
+			Username:  v.Username,
+			Email:     v.Email,
+		}
+
+		if v.Status == "pending" && v.SnapToken.Valid {
+			resp.Redirecturl = GenerateUrlRedirect(&o.cfg, v.SnapToken.String)
+		}
+
+		if v.PaymentMethod.Valid {
+			resp.PaymentType = v.PaymentMethod.String
+		}
+		result = append(result, resp)
+	}
+
+	return result, nil
 }
 
 // MidtransNotification implements [OrderServices].
-func (o OrderServicesImpl) MidtransNotification(req map[string]interface{}) {
-	panic("unimplemented")
+func (o *OrderServicesImpl) MidtransNotification(ctx context.Context, notif *response.MidtransNotification) error {
+	if !SignatureValidate(notif.SignatureKey, notif.OrderID, notif.GrossAmount, notif.StatusCode, o.cfg.Payment.Midtrans.ServerKey) {
+		return models.ErrSiganature
+	}
+
+	finalStatus := models.MapMidtransStatus(notif.TransactionStatus, notif.FraudStatus)
+	if finalStatus == models.OrderStatusPending {
+		log.Printf("Status masih pending untuk Order %s", notif.OrderID)
+		return nil
+	}
+
+	payload, err := json.Marshal(notif)
+	if err != nil {
+		log.Println(err)
+		return errors.New("internal server error")
+	}
+
+	err = o.OrderRepository.UpdatedOrder(ctx, &models.Order{
+		OrderID:        notif.OrderID,
+		WebHookPayload: payload,
+		GatewayTxID: sql.NullString{
+			String: notif.TransactionID,
+			Valid:  true,
+		},
+		PaymentMethod: sql.NullString{
+			String: notif.PaymentType,
+			Valid:  true,
+		},
+		Status: finalStatus,
+	})
+	if err != nil {
+		if errors.Is(err, models.ErrStatusAlreadySettled) {
+			log.Println("Webhook Duplikat (Status sama persis)")
+			return nil
+		}
+
+		if errors.Is(err, models.ErrSameStatus) {
+			log.Println("duplicate webhook")
+			return nil
+		}
+		return err
+	}
+
+	if finalStatus == models.OrderStatusSettled {
+		// do somthing
+		return nil
+	}
+
+	return nil
+}
+
+func SignatureValidate(signature, orderId, grossAmount, statusCode, serverKey string) bool {
+	payload := orderId + statusCode + grossAmount + serverKey
+	h := sha512.New()
+	h.Write([]byte(payload))
+	GenerateSignature := hex.EncodeToString(h.Sum(nil))
+
+	return subtle.ConstantTimeCompare([]byte(GenerateSignature), []byte(signature)) == 1
 }
 
 func GenerateUrlRedirect(cfg *config.Cfg, snapToken string) string {
@@ -152,15 +243,15 @@ func CreateDataTransaction(orderId string, user *models.Users, cfg *config.Cfg) 
 	listItem := []models.MerchantItemDetail{
 		{
 			ID:           "PKG-PREMIUM",
-			Price:        9000,
+			Price:        90000,
 			Quantity:     1,
-			Name:         "Upgrade user to premium",
+			Name:         "Upgrade premium",
 			Category:     "upgrade",
 			MerchantName: "Atelier",
 		},
 		{
 			ID:       "tax-1",
-			Price:    1000,
+			Price:    9000,
 			Quantity: 1,
 			Name:     "tax 10%",
 		},
@@ -171,7 +262,7 @@ func CreateDataTransaction(orderId string, user *models.Users, cfg *config.Cfg) 
 	return request.SnapRequest{
 		TransactionInfo: models.TransactionDetail{
 			OrderID:     orderId,
-			GrossAmount: 10000,
+			GrossAmount: 99000,
 		},
 		ItemInfo: listItem,
 		CustomerInfo: models.CustomerDetail{
@@ -198,7 +289,7 @@ func countGrossAmount(item []models.MerchantItemDetail) int64 {
 }
 
 func NewOrderServices(cfg config.Cfg, userRepository repository.RepositoryUser, httpClient *http.Client, orderRepository repository.OrderRepository, redis *redis.Client) OrderServices {
-	return OrderServicesImpl{
+	return &OrderServicesImpl{
 		cfg:             cfg,
 		userRepository:  userRepository,
 		httpClient:      httpClient,

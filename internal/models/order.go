@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"math/rand"
 	"time"
@@ -21,19 +22,33 @@ const (
 	OrderStatusRefund  OrderStatus = "refund"
 )
 
-func MapMidtransStatus(status string) OrderStatus {
-	switch status {
+var (
+	ErrStatusAlreadySettled = errors.New("Order is already settled")
+	ErrSameStatus           = errors.New("Status have same value")
+	ErrSiganature           = errors.New("signature invalid")
+)
+
+func MapMidtransStatus(statusTransaction string, fraud string) OrderStatus {
+	switch statusTransaction {
+	case "capture":
+		if fraud == "accept" {
+			return OrderStatusSettled
+		}
+		if fraud == "challenge" {
+			return OrderStatusPending
+		}
+		return OrderStatusDeny
 	case "pending":
 		return OrderStatusPending
-	case "settlement":
+	case "settlement", "settled":
 		return OrderStatusSettled
-	case "expire":
+	case "expire", "expired":
 		return OrderStatusExpired
 	case "cancel":
 		return OrderStatusCancel
 	case "deny":
 		return OrderStatusDeny
-	case "refund":
+	case "refund", "chargeback", "partial_chargeback", "partial_refund":
 		return OrderStatusRefund
 	default:
 		return OrderStatusDeny
@@ -50,7 +65,10 @@ type Order struct {
 	Gateway        string
 	GatewayTxID    sql.NullString
 	SnapToken      sql.NullString
+	Username       string
+	Email          string
 	WebHookPayload []byte
+	PaymentMethod  sql.NullString
 	ExpiretAt      time.Time
 	PaidAt         pgtype.Timestamptz
 	CreatedAt      time.Time

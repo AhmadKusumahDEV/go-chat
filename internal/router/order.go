@@ -13,9 +13,10 @@ type OrderRoutes struct {
 
 func (r *OrderRoutes) RegisterRoutes(router *gin.Engine, srv *config.Server) {
 	ordergroup := router.Group("/api/order")
-	ordergroup.Use(middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess))
 
-	ordergroup.POST("", r.handle.HandlerAddOrder)
+	ordergroup.POST("", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerAddOrder)
+	ordergroup.GET("", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerGetTransaction)
+	ordergroup.POST("/midtrans/webhooks", r.handle.HandlerMidtransNotification)
 }
 
 func NewOrderRouter(handler handlers.HandlerOrder) config.RouteRegistrar {
