@@ -1,7 +1,7 @@
 # Build stage
 FROM golang:1.25-alpine AS builder
 
-RUN apk add --no-cache ca-certificates git
+RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /app
 
 # Copy go mod files
@@ -34,6 +34,7 @@ EXPOSE 8080
 # Default environment variables
 ENV APP_ENV=production
 ENV SERVER_PORT=8080
+ENV TZ=Asia/Jakarta
 
 
 CMD ["./main"]

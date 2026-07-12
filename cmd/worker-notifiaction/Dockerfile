@@ -1,7 +1,7 @@
 # Build stage
 FROM golang:1.25-alpine AS builder
 
-RUN apk add --no-cache ca-certificates git
+RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /app
 
 # Copy go mod files
@@ -32,5 +32,6 @@ USER appuser
 
 # Default environment variables
 ENV APP_ENV=production
+ENV TZ=Asia/Jakarta
 
 CMD ["./worker"]
