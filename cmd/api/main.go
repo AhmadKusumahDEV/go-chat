@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	_ "time/tzdata"
 
 	"firebase.google.com/go/v4/messaging"
 	"github.com/AhmadKusumahDEV/go-chat/internal/cahce"

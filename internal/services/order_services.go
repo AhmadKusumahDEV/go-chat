@@ -234,10 +234,13 @@ func GenerateUrlSnap(cfg *config.Cfg) string {
 func CreateDataTransaction(orderId string, user *models.Users, cfg *config.Cfg) (request.SnapRequest, time.Time) {
 	now := time.Now()
 
-	loc, _ := time.LoadLocation("Asia/Jakarta")
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		log.Println("error when load location", err)
+		loc = time.FixedZone("WIB", 7*3600)
+	}
 
 	startTimeStr := now.In(loc).Format("2006-01-02 15:04:05 -0700")
-
 	expiredAtDB := now.Add(time.Hour * 1).UTC()
 
 	listItem := []models.MerchantItemDetail{
