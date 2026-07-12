@@ -148,7 +148,7 @@ func (o *OrderServicesImpl) GetTransactionList(ctx context.Context, userId strin
 		}
 
 		if v.PaymentMethod.Valid {
-			resp.PaymentType = v.PaymentMethod.String
+			resp.PaymentMethod = v.PaymentMethod.String
 		}
 		result = append(result, resp)
 	}
