@@ -63,7 +63,7 @@ func (o *OrderRepositoryImpl) UpdatedOrder(ctx context.Context, order *models.Or
 
 	query := `
 	Update
-		order 
+		orders 
 	set 
 		status = $1,
 		updated_at = now(),

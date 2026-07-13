@@ -74,6 +74,7 @@ func main() {
 	}
 
 	// 8. Wait for shutdown signal
+	log.Println("waiting signal exit")
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
