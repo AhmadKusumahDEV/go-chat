@@ -107,11 +107,11 @@ type MerchantItemDetail struct {
 
 func GenerateOrderID(now time.Time) string {
 	date := now.Format("20060102")
-	random := randomString(8)
+	random := RandomString(8)
 	return fmt.Sprintf("INV-%s-%s", date, random)
 }
 
-func randomString(n int) string {
+func RandomString(n int) string {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, n)
 	for i := range b {

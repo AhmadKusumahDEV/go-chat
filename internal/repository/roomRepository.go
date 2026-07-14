@@ -230,10 +230,12 @@ func (p *RepositoryRoomImpl) FindRoomDetail(ctx context.Context, roomID string) 
 
 	var room models.RoomDetail
 	avatarUrl := sql.NullString{}
+	roomName := sql.NullString{}
+	description := sql.NullString{}
 	err := p.db.QueryRowContext(ctx, query, roomID).Scan(
 		&room.ID,
-		&room.Name,
-		&room.Description,
+		&roomName,
+		&description,
 		&room.RoomType,
 		&avatarUrl,
 		&room.IsPrivate,
@@ -243,6 +245,14 @@ func (p *RepositoryRoomImpl) FindRoomDetail(ctx context.Context, roomID string) 
 	)
 
 	room.AvatarUrl = fmt.Sprintf("https://api.dicebear.com/10.x/initials/png?seed=%s", room.Name)
+
+	if roomName.Valid {
+		room.Name = roomName.String
+	}
+
+	if description.Valid {
+		room.Description = description.String
+	}
 
 	if avatarUrl.Valid {
 		room.AvatarUrl = avatarUrl.String

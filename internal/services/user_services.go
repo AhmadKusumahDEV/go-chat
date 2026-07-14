@@ -1,13 +1,15 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
-	"sync"
+	"net/http"
 	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/config"
@@ -18,6 +20,7 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
 	"github.com/AhmadKusumahDEV/go-chat/pkg/storage"
 	"github.com/gofrs/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 type UsersServices interface {
@@ -29,6 +32,7 @@ type UsersServices interface {
 	GetUserByID(ctx context.Context, userId uuid.UUID) (*response.UserResponse, error)
 	StoreFirebaseToken(ctx context.Context, fcm *request.FcmRequest, userId uuid.UUID) error
 	LogoutUser(ctx context.Context, userId uuid.UUID, installationID string) (int, error)
+	VerifyEmail(ctx context.Context, userId uuid.UUID) error
 	UpdatedUserInfo(ctx context.Context, userId uuid.UUID, req *request.UpdateProfileRequest) error
 	UpdateAvatar(ctx context.Context, userID string, reader io.Reader, size int64, contentType, objectName string) (string, error)
 }
@@ -37,16 +41,60 @@ type UsersServivesImpl struct {
 	userRepository     repository.RepositoryUser
 	firebaseRepository repository.RepositoryFirebase
 	minioS3            storage.ObjectStorage
+	rds                *redis.Client
+	httpClient         *http.Client
+	jwtConfig          config.JwtConfig
+	espConfig          config.Esp
+}
 
-	jwtConfig config.JwtConfig
+// VerifyEmail implements [UsersServices].
+func (u *UsersServivesImpl) VerifyEmail(ctx context.Context, userId uuid.UUID) error {
+	user, err := u.userRepository.FindByID(ctx, userId)
+	if err != nil {
+		log.Println(err)
+		return errors.New("user not found")
+	}
+
+	if user.Verify {
+		return errors.New("user already verify")
+	}
+
+	otp := models.RandomString(5)
+
+	payload := BuildMailOtp(ctx, user.Email, otp)
+
+	key := fmt.Sprintf("otp:verify:%s", otp)
+
+	req, _ := http.NewRequest("POST", u.espConfig.Brevo.Url, bytes.NewBuffer(payload))
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("api-key", u.espConfig.Brevo.ApiKey)
+
+	resp, err := u.httpClient.Do(req)
+	if err != nil {
+		log.Println(err)
+		return errors.New("tidak dapat melakukan kirim email")
+	}
+
+	err = u.rds.Set(ctx, key, user.ID.String(), 5*time.Minute).Err()
+	if err != nil {
+		log.Println(err)
+		return errors.New("tidak dapat melakukan kirim email")
+	}
+	defer resp.Body.Close()
+
+	return nil
 }
 
 // LoginUser implements UsersServices.
 func (u *UsersServivesImpl) LoginUser(ctx context.Context, req *request.LoginRequest) (*response.JwtReponse, error) {
-	var mu sync.Mutex
+	keyLock := fmt.Sprintf("login:lock:%s", req.Email)
 
-	mu.Lock()
-	defer mu.Unlock()
+	lockStat, err := u.rds.SetNX(ctx, keyLock, "1", 2*time.Second).Result()
+	if err != nil || !lockStat {
+		log.Println(err)
+		return nil, errors.New("sedang melakukan proses login mohon meunggu")
+	}
 
 	users, err := u.userRepository.FindByEmail(ctx, req.Email)
 
@@ -290,11 +338,45 @@ func (u *UsersServivesImpl) UpdateAvatar(ctx context.Context, userID string, rea
 	return avatarURL, nil
 }
 
-func NewUsersServices(userRepository repository.RepositoryUser, firebase repository.RepositoryFirebase, jwtConfig config.JwtConfig, minio storage.ObjectStorage) UsersServices {
+func BuildMailOtp(ctx context.Context, recipientemail, otp string) []byte {
+
+	htmlContent := fmt.Sprintf(`
+		<html>
+		<body style="font-family: sans-serif;">
+			<h2>Verifikasi Upgrade Tier</h2>
+			<p>Masukkan kode berikut ke dalam aplikasi:</p>
+			<div style="font-size: 24px; font-weight: bold;">%s</div>
+		</body>
+		</html>
+	`, otp)
+
+	payload := map[string]interface{}{
+		"sender": map[string]string{
+			"name":  "Aku Admin",
+			"email": "noreply@madgo.my.id",
+		},
+		"to": []map[string]string{
+			{
+				"email": recipientemail,
+			},
+		},
+		"subject":     "Kode Verifikasi Anda",
+		"htmlContent": htmlContent,
+	}
+
+	jsonPayload, _ := json.Marshal(payload)
+
+	return jsonPayload
+}
+
+func NewUsersServices(userRepository repository.RepositoryUser, firebase repository.RepositoryFirebase, jwtConfig config.JwtConfig, espconfig config.Esp, minio storage.ObjectStorage, redis *redis.Client, httpClient *http.Client) UsersServices {
 	return &UsersServivesImpl{
 		userRepository:     userRepository,
 		firebaseRepository: firebase,
 		minioS3:            minio,
 		jwtConfig:          jwtConfig,
+		espConfig:          espconfig,
+		httpClient:         httpClient,
+		rds:                redis,
 	}
 }

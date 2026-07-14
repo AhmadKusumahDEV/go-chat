@@ -53,7 +53,12 @@ func (s *MessageServicesImpl) GetRoomMessages(ctx context.Context, roomID string
 			return nil, errors.New("invalid cursor format")
 		}
 	} else {
-		targetTime = time.Now().UTC()
+		loc, err := time.LoadLocation("Asia/Jakarta")
+		if err != nil {
+			log.Println("Peringatan: time.LoadLocation gagal di GetRoomMessages, fallback ke FixedZone")
+			loc = time.FixedZone("WIB", 7*3600)
+		}
+		targetTime = time.Now().In(loc)
 	}
 
 	timeStr := targetTime.Format(time.RFC3339Nano)

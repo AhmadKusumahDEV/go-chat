@@ -338,7 +338,7 @@ func (r *RoomServiceImpl) GetRoomDetail(ctx context.Context, roomID string, user
 	roomDetail, err := r.roomRepository.FindRoomDetail(ctx, roomID)
 	if err != nil {
 		log.Printf("error on services layer GetRoomDetail: %v", err)
-		return nil, err
+		return nil, errors.New("got error when get room detail")
 	}
 
 	if roomDetail.AvatarUrl != "" && !ChechkPrefixHttps(roomDetail.AvatarUrl) {

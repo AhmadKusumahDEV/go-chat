@@ -64,13 +64,13 @@ func main() {
 	// 	log.Println("cannot setup message firebase:", err)
 	// }
 
-	client, err := storage.NewMinioStorage(cfg)
+	s3Object, err := storage.NewMinioStorage(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
 	httpClient := httpclient.NewStdHTTPClient()
 
-	err = client.Ping(appContext)
+	err = s3Object.Ping(appContext)
 	log.Println(err)
 
 	firebaseCredentialPath := "chat-appliaction-19fd5-firebase-adminsdk-fbsvc-51d924664f.json"
@@ -122,10 +122,10 @@ func main() {
 	publisher := queue.NewRabbitMQPublisher(rmq.GetChannel())
 
 	// 3. Initialize Services
-	roomServices := services.NewRoomServices(roomRepository, memberRepository, attacmentsRepository, newClientRedis, validate, client)
-	usersServices := services.NewUsersServices(usersRepository, firebaseRepository, cfg.Jwt, client)
+	roomServices := services.NewRoomServices(roomRepository, memberRepository, attacmentsRepository, newClientRedis, validate, s3Object)
+	usersServices := services.NewUsersServices(usersRepository, firebaseRepository, cfg.Jwt, cfg.Esp, s3Object, rds, httpClient)
 	oauthServices := services.NewOauthServices(cfg, newClientRedis, oauthStatesRepository, usersRepository)
-	messageServices := services.NewMessageServices(messageRepository, memberRepository, client)
+	messageServices := services.NewMessageServices(messageRepository, memberRepository, s3Object)
 	memberServices := services.NewMemberServices(roomRepository, memberRepository, usersRepository, messageRepository, newClientRedis, validate)
 	orderServices := services.NewOrderServices(cfg, usersRepository, httpClient, orderRepository, rds)
 
@@ -134,7 +134,7 @@ func main() {
 	wsHandler := handlers.NewWebsocketHandler(manager, roomServices)
 	wsRouter := router.NewWebsocketRouter(wsHandler)
 
-	uploadworker := worker.NewDispatcher(client, rds, cfg, attacmentsRepository, manager, 10, 1000)
+	uploadworker := worker.NewDispatcher(s3Object, rds, cfg, attacmentsRepository, manager, 10, 1000)
 	uploadworker.StartWorkerPool()
 
 	defer manager.Stop()

@@ -7,6 +7,31 @@ import (
 	"github.com/spf13/viper"
 )
 
+type PaymentConfig struct {
+	Midtrans Midtrans `mapstructure:"midtrans"`
+}
+
+type Midtrans struct {
+	ClientKey             string   `mapstructure:"client_key"`
+	ServerKey             string   `mapstructure:"server_key"`
+	MerchantId            string   `mapstructure:"merchant_id"`
+	Mode                  string   `mapstructure:"mode"`
+	UrlSnapSanbox         string   `mapstructure:"url_snap_sanbox"`
+	UrlSnapProduction     string   `mapstructure:"url_snap_production"`
+	UrlRedirectSanbox     string   `mapstructure:"url_redirect_sandbox"`
+	UrlRedirectProduction string   `mapstructure:"url_redirect_production"`
+	AllowMethodPayment    []string `mapstructure:"allow_payment_methods"`
+}
+
+type Esp struct {
+	Brevo Brevo `mapstructure:"brevo"`
+}
+
+type Brevo struct {
+	ApiKey string `mapstructure:"api_key"`
+	Url    string `mapstructure:"url"`
+}
+
 type JwtConfig struct {
 	SecretKeyrefresh       string `mapstructure:"RefreshSecretKey"`
 	SecretKeyAccess        string `mapstructure:"AccessSecretKey"`
@@ -38,6 +63,7 @@ type Cfg struct {
 	Firebase    FirebaseConfig `mapstructure:"firebase"`
 	Minio       MinoConfig     `mapstructure:"minio"`
 	Payment     PaymentConfig  `mapstructure:"payment"`
+	Esp         Esp            `mapstructure:"esp"`
 }
 
 func LoadConfig() (config Cfg, err error) {
