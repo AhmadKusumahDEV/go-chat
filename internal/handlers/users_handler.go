@@ -60,6 +60,7 @@ func (u *UserHandlerImpl) HandlerVerifyOtp(c *gin.Context) {
 			Status:  http.StatusInternalServerError,
 			Message: err.Error(),
 		})
+		return
 	}
 
 	c.JSON(http.StatusOK, response.ApiResponse{
