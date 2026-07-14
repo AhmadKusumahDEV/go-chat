@@ -157,8 +157,8 @@ func (p *RepositoryRoomImpl) CreateRoomDirect(ctx context.Context, room *models.
 		}
 	}
 
-	messageQuery := `INSERT INTO messages (id, room_id, content, message_type, user_id, timestamp) VALUES ($1, $2, $3, $4, $5 , $6)`
-	_, err = tx.ExecContext(ctx, messageQuery, msg.ID, room.ID, msg.Content, msg.Type, msg.SenderID, msg.Timestamp)
+	messageQuery := `INSERT INTO messages (id, room_id, content, message_type, user_id) VALUES ($1, $2, $3, $4, $5)`
+	_, err = tx.ExecContext(ctx, messageQuery, msg.ID, room.ID, msg.Content, msg.Type, msg.SenderID)
 	if err != nil {
 		return err
 	}

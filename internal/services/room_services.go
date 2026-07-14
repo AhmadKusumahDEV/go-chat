@@ -100,6 +100,14 @@ func (r *RoomServiceImpl) CreateDirectRoom(ctx context.Context, req *request.Cre
 		return uuid.UUID{}, errors.New("failed generate uuid")
 	}
 
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		log.Println("Peringatan: time.LoadLocation gagal di GetRoomMessages, fallback ke FixedZone")
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+	var targetTime time.Time
+	targetTime = time.Now().In(loc)
+
 	roomData := &models.Room{
 		ID:        v6,
 		Roomtype:  "direct",
@@ -128,7 +136,7 @@ func (r *RoomServiceImpl) CreateDirectRoom(ctx context.Context, req *request.Cre
 		SenderID:  &userId,
 		Content:   req.Content,
 		Type:      req.MessageType,
-		Timestamp: time.Now(),
+		Timestamp: targetTime,
 	}
 
 	err = r.roomRepository.CreateRoomDirect(ctx, roomData, membersData, messageData)
