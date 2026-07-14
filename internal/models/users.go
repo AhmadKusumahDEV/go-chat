@@ -18,8 +18,8 @@ type Users struct {
 	About        sql.NullString `json:"about" db:"about"`
 	ProviderName sql.NullString `json:"provider_name" db:"provider_name"`
 	ProviderID   sql.NullString `json:"provider_id" db:"provider_id"`
-	Tier         string         `json:"tier" db:"tier"`
-	Verify       bool           `json:"verify" db:"verify"`
+	Tier         sql.NullString `json:"tier" db:"tier"`
+	Verify       sql.NullBool   `json:"verify" db:"verify"`
 }
 
 func (u *Users) GetID() interface{}   { return u.ID }

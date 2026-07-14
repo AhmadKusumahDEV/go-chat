@@ -75,7 +75,7 @@ func (u *UsersServivesImpl) VerifyEmail(ctx context.Context, userId uuid.UUID) e
 		return errors.New("user not found")
 	}
 
-	if user.Verify {
+	if user.Verify.Bool {
 		return errors.New("user already verify")
 	}
 
@@ -85,6 +85,9 @@ func (u *UsersServivesImpl) VerifyEmail(ctx context.Context, userId uuid.UUID) e
 	}
 
 	payload := BuildMailOtp(ctx, user.Email, otp)
+	if payload == nil {
+		return errors.New("tidak dapat melakukan kirim email")
+	}
 
 	key := fmt.Sprintf("otp:verify:%s", otp)
 
@@ -361,33 +364,55 @@ func (u *UsersServivesImpl) UpdateAvatar(ctx context.Context, userID string, rea
 	return avatarURL, nil
 }
 
-func BuildMailOtp(ctx context.Context, recipientemail, otp string) []byte {
-
+func BuildMailOtp(ctx context.Context, recipientEmail, otp string) []byte {
 	htmlContent := fmt.Sprintf(`
+		<!DOCTYPE html>
 		<html>
-		<body style="font-family: sans-serif;">
-			<h2>Verifikasi Upgrade Tier</h2>
-			<p>Masukkan kode berikut ke dalam aplikasi:</p>
-			<div style="font-size: 24px; font-weight: bold;">%s</div>
+		<body style="background-color: #f4f5f7; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 40px 0;">
+			<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+				<div style="text-align: center; margin-bottom: 30px;">
+					<h2 style="color: #333333; font-size: 24px; margin: 0;">Verifikasi Akun</h2>
+				</div>
+				<p style="color: #555555; font-size: 16px; line-height: 1.5;">Halo,</p>
+				<p style="color: #555555; font-size: 16px; line-height: 1.5;">Kami menerima permintaan untuk melakukan aktivitas pada akun Anda. Silakan masukkan kode verifikasi berikut ke dalam aplikasi:</p>
+				
+				<div style="text-align: center; margin: 35px 0;">
+					<div style="display: inline-block; font-size: 36px; font-weight: bold; color: #1a73e8; letter-spacing: 8px; padding: 15px 30px; background-color: #f8f9fa; border: 1px dashed #c6d4e1; border-radius: 6px;">
+						%s
+					</div>
+				</div>
+				
+				<p style="color: #555555; font-size: 14px; line-height: 1.5;">Kode ini hanya berlaku selama <b>5 menit</b>. Jangan bagikan kode ini kepada siapa pun, termasuk pihak admin.</p>
+				
+				<hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0;" />
+				<p style="color: #999999; font-size: 12px; text-align: center; line-height: 1.5;">
+					Jika Anda tidak merasa melakukan permintaan ini, abaikan email ini.<br>
+					&copy; 2026 Madgo. Semua hak dilindungi.
+				</p>
+			</div>
 		</body>
 		</html>
 	`, otp)
 
 	payload := map[string]interface{}{
 		"sender": map[string]string{
-			"name":  "Aku Admin",
+			"name":  "madgov",
 			"email": "noreply@madgo.my.id",
 		},
 		"to": []map[string]string{
 			{
-				"email": recipientemail,
+				"email": recipientEmail,
 			},
 		},
-		"subject":     "Kode Verifikasi Anda",
+		"subject":     "Kode Verifikasi Madgo Anda",
 		"htmlContent": htmlContent,
 	}
 
-	jsonPayload, _ := json.Marshal(payload)
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
 
 	return jsonPayload
 }
