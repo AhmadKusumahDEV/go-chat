@@ -27,6 +27,8 @@ func (r *UsersRoutes) RegisterRoutes(router *gin.Engine, srv *config.Server) {
 	usersgroup.POST("/login", r.handle.HandlerLogin)
 	usersgroup.POST("/fcm-token", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerFcmToken)
 	usersgroup.POST("/logout", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerLogout)
+	usersgroup.POST("/verify", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerVerifyUser)
+	usersgroup.POST("/otp", middelware.JwtAuthMiddleware(srv.JwtConfig.SecretKeyAccess), r.handle.HandlerVerifyOtp)
 }
 
 func NewUsersRouter(handler handlers.UserHandler) config.RouteRegistrar {

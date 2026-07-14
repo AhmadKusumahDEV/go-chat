@@ -3,12 +3,14 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net/http"
 	"time"
 
@@ -33,6 +35,7 @@ type UsersServices interface {
 	StoreFirebaseToken(ctx context.Context, fcm *request.FcmRequest, userId uuid.UUID) error
 	LogoutUser(ctx context.Context, userId uuid.UUID, installationID string) (int, error)
 	VerifyEmail(ctx context.Context, userId uuid.UUID) error
+	VerifyOtp(ctx context.Context, userId, otp string) error
 	UpdatedUserInfo(ctx context.Context, userId uuid.UUID, req *request.UpdateProfileRequest) error
 	UpdateAvatar(ctx context.Context, userID string, reader io.Reader, size int64, contentType, objectName string) (string, error)
 }
@@ -47,6 +50,23 @@ type UsersServivesImpl struct {
 	espConfig          config.Esp
 }
 
+// VerifyOtp implements [UsersServices].
+func (u *UsersServivesImpl) VerifyOtp(ctx context.Context, userId, otp string) error {
+	key := fmt.Sprintf("otp:verify:%s", otp)
+
+	val, err := u.rds.GetDel(ctx, key).Result()
+	if err != nil || val != otp {
+		return errors.New("invalid otp")
+	}
+
+	err = u.userRepository.UpdateVerifyUser(ctx, userId)
+	if err != nil {
+		log.Println(err)
+		return errors.New("tidak dapat melakukan updated user data tidak valid")
+	}
+	return nil
+}
+
 // VerifyEmail implements [UsersServices].
 func (u *UsersServivesImpl) VerifyEmail(ctx context.Context, userId uuid.UUID) error {
 	user, err := u.userRepository.FindByID(ctx, userId)
@@ -59,7 +79,10 @@ func (u *UsersServivesImpl) VerifyEmail(ctx context.Context, userId uuid.UUID) e
 		return errors.New("user already verify")
 	}
 
-	otp := models.RandomString(5)
+	otp, err := GenerateOtp(6)
+	if err != nil {
+		otp = models.RandomString(6)
+	}
 
 	payload := BuildMailOtp(ctx, user.Email, otp)
 
@@ -76,7 +99,7 @@ func (u *UsersServivesImpl) VerifyEmail(ctx context.Context, userId uuid.UUID) e
 		return errors.New("tidak dapat melakukan kirim email")
 	}
 
-	err = u.rds.Set(ctx, key, user.ID.String(), 5*time.Minute).Err()
+	err = u.rds.Set(ctx, key, otp, 5*time.Minute).Err()
 	if err != nil {
 		log.Println(err)
 		return errors.New("tidak dapat melakukan kirim email")
@@ -367,6 +390,21 @@ func BuildMailOtp(ctx context.Context, recipientemail, otp string) []byte {
 	jsonPayload, _ := json.Marshal(payload)
 
 	return jsonPayload
+}
+
+func GenerateOtp(n int) (string, error) {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, n)
+
+	for i := range b {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", err
+		}
+		b[i] = charset[num.Int64()]
+	}
+
+	return string(b), nil
 }
 
 func NewUsersServices(userRepository repository.RepositoryUser, firebase repository.RepositoryFirebase, jwtConfig config.JwtConfig, espconfig config.Esp, minio storage.ObjectStorage, redis *redis.Client, httpClient *http.Client) UsersServices {

@@ -32,3 +32,7 @@ type FcmRequest struct {
 type LogoutRequest struct {
 	FcmToken string `json:"fcm_token" binding:"required"`
 }
+
+type OtpRequest struct {
+	Otp string `json:"otp" binding:"required"`
+}

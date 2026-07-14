@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
 )
@@ -15,11 +16,29 @@ type RepositoryUser interface {
 	FindByProviderID(ctx context.Context, providerName string, providerID string) (*models.Users, error)
 	FindByIDs(ctx context.Context, userIDs []string) ([]models.Users, error)
 	ChangeAvatar(ctx context.Context, userID, avatarURL string) error
+	UpdateVerifyUser(ctx context.Context, userID string) error
 }
 
 type RepositoryUserImpl struct {
 	RepositoryBased[*models.Users]
 	db *sql.DB
+}
+
+func (r *RepositoryUserImpl) UpdateVerifyUser(ctx context.Context, userID string) error {
+	query := `
+	update 
+		users
+	set
+		verify = true
+	where
+		id = $1
+	`
+	_, err := r.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		log.Println(err)
+		return errors.New("failed update user")
+	}
+	return nil
 }
 
 // FindByEmail implements RepositoryUser.

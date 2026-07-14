@@ -24,11 +24,83 @@ type UserHandler interface {
 	HandlerFcmToken(c *gin.Context)
 	HandlerLogout(c *gin.Context)
 	HandlerUpdateUser(c *gin.Context)
+	HandlerVerifyUser(c *gin.Context)
+	HandlerVerifyOtp(c *gin.Context)
 	UploadUserAvatar(c *gin.Context)
 }
 
 type UserHandlerImpl struct {
 	services services.UsersServices
+}
+
+// HandlerVerifyOtp implements [UserHandler].
+func (u *UserHandlerImpl) HandlerVerifyOtp(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found in context",
+		})
+		return
+	}
+
+	var otp request.OtpRequest
+	err := c.ShouldBindJSON(&otp)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid request body",
+		})
+		return
+	}
+
+	err = u.services.VerifyOtp(c.Request.Context(), userID.(string), otp.Otp)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Message: "success verify otp",
+	})
+}
+
+// HandlerVerifyUser implements [UserHandler].
+func (u *UserHandlerImpl) HandlerVerifyUser(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found in context",
+		})
+		return
+	}
+
+	id, err := uuid.FromString(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "invalid user ID format",
+		})
+		return
+	}
+
+	err = u.services.VerifyEmail(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Message: "wait for email verification",
+	})
 }
 
 // HandlerGetAllUser implements [UserHandler].
