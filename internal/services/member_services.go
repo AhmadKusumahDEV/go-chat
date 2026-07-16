@@ -21,7 +21,7 @@ type MemberService interface {
 	AddMember(ctx context.Context, member request.AddMemberRequest) error
 	GetMembers(ctx context.Context, roomID string) ([]*response.MemberResponse, error)
 	LeaveRoom(ctx context.Context, roomID string, userID string) error
-	RemoveMember(ctx context.Context, roomID string, targetUserID string, removedByUserID string) error
+	RemoveMember(ctx context.Context, roomID string, userId string, batchTargetUserId request.RemoveMemberRequest) error
 	PromoteAdmin(ctx context.Context, roomID, targetUserID, requesterUserID string) error
 	DemoteAdmin(ctx context.Context, roomID, targetUserID, requesterUserID string) error
 	TransferOwnership(ctx context.Context, roomID, fromUserID, toUserID string) error
@@ -368,8 +368,8 @@ func (m *MemberServiceImpl) LeaveRoom(ctx context.Context, roomID string, userID
 }
 
 // RemoveMember implements MemberService.
-func (m *MemberServiceImpl) RemoveMember(ctx context.Context, roomID string, targetUserID string, removedByUserID string) error {
-	admin, err := m.memberRepository.FindMember(ctx, roomID, removedByUserID)
+func (m *MemberServiceImpl) RemoveMember(ctx context.Context, roomID string, userId string, batchTargetUserId request.RemoveMemberRequest) error {
+	admin, err := m.memberRepository.FindMember(ctx, roomID, userId)
 	if err != nil {
 		return errors.New("forbidden: you are not a member of this room")
 	}
@@ -378,21 +378,30 @@ func (m *MemberServiceImpl) RemoveMember(ctx context.Context, roomID string, tar
 		return errors.New("forbidden: only admin can remove members")
 	}
 
-	targetInfo, err := m.memberRepository.FindMember(ctx, roomID, targetUserID)
+	for j := range batchTargetUserId.Members {
+		if batchTargetUserId.Members[j] == userId {
+			return errors.New("cannot remove yourself")
+		}
+	}
+
+	sumMemberInfo, err := m.memberRepository.CheckMembers(ctx, roomID, batchTargetUserId.Members)
 	if err != nil {
-		return errors.New("target member not found in this room")
+		return err
 	}
 
-	if targetInfo.Role == "admin" {
-		return errors.New("cannot remove admin")
+	if sumMemberInfo.Total == 0 {
+		return errors.New("member not found in this room")
 	}
 
-	// Cannot remove yourself via this endpoint
-	if targetUserID == removedByUserID {
-		return errors.New("cannot remove yourself")
+	if sumMemberInfo.Total < len(batchTargetUserId.Members) {
+		return errors.New("member data yang dikirim terdapat beberapa member tidak ada di room ini")
 	}
 
-	err = m.memberRepository.RemoveMember(ctx, roomID, targetUserID)
+	if sumMemberInfo.SumAdmin > 0 {
+		return errors.New("cannot remove member with role admin")
+	}
+
+	_, err = m.memberRepository.RemoveBatchMembers(ctx, roomID, batchTargetUserId.Members)
 	if err != nil {
 		return errors.New("member not found in this room")
 	}

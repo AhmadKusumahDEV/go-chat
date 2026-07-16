@@ -12,6 +12,10 @@ type AddMemberRequest struct {
 	AddMemberBy string   `json:"added_by" validate:"required"`
 }
 
+type RemoveMemberRequest struct {
+	Members []string `json:"members" validate:"required,min=1"`
+}
+
 type ManageMemberRequest struct {
 	TargetUserID string `json:"target_user_id" binding:"required,uuid"`
 }

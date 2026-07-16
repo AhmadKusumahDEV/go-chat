@@ -305,13 +305,12 @@ func (h *HandlerMemberImpl) HandleRemoveMember(c *gin.Context) {
 		return
 	}
 
-	var body struct {
-		TargetUserID string `json:"target_user_id" binding:"required,uuid"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
+	var batchUser request.RemoveMemberRequest
+
+	if err := c.ShouldBindJSON(&batchUser); err != nil {
 		c.JSON(http.StatusBadRequest, response.ApiResponse{
 			Status:  http.StatusBadRequest,
-			Message: "target_user_id is required",
+			Message: "format data tidak valid",
 		})
 		return
 	}
@@ -325,7 +324,7 @@ func (h *HandlerMemberImpl) HandleRemoveMember(c *gin.Context) {
 		return
 	}
 
-	err = h.srv.RemoveMember(c.Request.Context(), roomID, body.TargetUserID, userID.(string))
+	err = h.srv.RemoveMember(c.Request.Context(), roomID, userID.(string), batchUser)
 	if err != nil {
 		c.JSON(http.StatusForbidden, response.ApiResponse{
 			Status:  http.StatusForbidden,

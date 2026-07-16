@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
+	"github.com/lib/pq"
 )
 
 type RepositoryMembers interface {
@@ -15,6 +16,8 @@ type RepositoryMembers interface {
 	CreateBatch(ctx context.Context, members []*models.Members) error
 	FindMember(ctx context.Context, roomID string, userID string) (*models.Members, error)
 	RemoveMember(ctx context.Context, roomID string, userID string) error
+	RemoveBatchMembers(ctx context.Context, roomID string, members []string) (int, error)
+	CheckMembers(ctx context.Context, roomID string, members []string) (models.BatchInfoMemberByRoomId, error)
 	GetRoomMemberIDs(ctx context.Context, roomID string) ([]string, error)
 	UpdateRole(ctx context.Context, roomID, targetID, role string) error
 	TransferRole(ctx context.Context, roomID, fromUserID, toUserID string) error
@@ -30,6 +33,37 @@ func NewMemberRepository(db *sql.DB) RepositoryMembers {
 		BaseRepository: NewBaseRepository[*models.Members](db).(*BaseRepository[*models.Members]),
 		db:             db,
 	}
+}
+
+func (r *RepositoryMemberImpl) CheckMembers(ctx context.Context, roomID string, members []string) (models.BatchInfoMemberByRoomId, error) {
+	var result models.BatchInfoMemberByRoomId
+
+	query := `
+	SELECT  
+		COUNT(*) FILTER (WHERE rm.role = 'admin') AS total_admin,
+		COUNT(*) FILTER (WHERE rm.role = 'member') AS total_member,
+		COUNT(*) AS total
+	FROM
+		users u
+	JOIN
+		room_members rm ON u.id = rm.user_id 
+	WHERE 
+		rm.room_id = $1
+		AND u.id = ANY($2::uuid[]);
+	`
+
+	err := r.db.QueryRowContext(ctx, query, roomID, pq.Array(members)).Scan(
+		&result.SumAdmin,
+		&result.SumMember,
+		&result.Total,
+	)
+
+	if err != nil {
+		log.Println(err)
+		return models.BatchInfoMemberByRoomId{}, errors.New("terjadi kesalahan pengambilan data")
+	}
+
+	return result, nil
 }
 
 func (r *RepositoryMemberImpl) TransferRole(ctx context.Context, roomID, fromUserID, toUserID string) error {
@@ -145,7 +179,6 @@ func (r *RepositoryMemberImpl) CreateBatch(ctx context.Context, members []*model
 	return tx.Commit()
 }
 
-// RemoveMember implements RepositoryMembers.
 func (r *RepositoryMemberImpl) RemoveMember(ctx context.Context, roomID string, userID string) error {
 	query := `DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`
 	result, err := r.db.ExecContext(ctx, query, roomID, userID)
@@ -159,6 +192,39 @@ func (r *RepositoryMemberImpl) RemoveMember(ctx context.Context, roomID string, 
 	}
 
 	return nil
+}
+
+// RemoveMember implements RepositoryMembers.
+func (r *RepositoryMemberImpl) RemoveBatchMembers(ctx context.Context, roomID string, members []string) (int, error) {
+	query := `
+    DELETE FROM room_members 
+    WHERE room_id = $1 
+      AND user_id = ANY($2::uuid[])
+    RETURNING user_id;
+    `
+
+	// Langsung eksekusi, PostgreSQL menjamin ini atomik
+	rows, err := r.db.QueryContext(ctx, query, roomID, pq.Array(members))
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var deletedCount int
+
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		deletedCount++
+	}
+
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	return deletedCount, nil
 }
 
 // GetRoomMemberIDs implements RepositoryMembers.

@@ -24,3 +24,9 @@ func (u *Members) Validate() error {
 	}
 	return nil
 }
+
+type BatchInfoMemberByRoomId struct {
+	SumAdmin  int
+	SumMember int
+	Total     int
+}
