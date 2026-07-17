@@ -12,4 +12,5 @@ type ObjectStorage interface {
 	DeleteObject(ctx context.Context, bucketName, objectName string) error
 	GetObjectBySignedURL(ctx context.Context, bucketName string, objectName string, expired time.Duration) (string, error)
 	GetObjectURL(ctx context.Context, objectName string, bucketName string) (string, error)
+	GeneratePresigneUrl(ctx context.Context, objectName string) (string, error)
 }

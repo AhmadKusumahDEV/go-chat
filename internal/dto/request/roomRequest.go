@@ -10,11 +10,11 @@ import (
 )
 
 type CreateRoomRequest struct {
-	Name        string   `json:"name" validate:"required,min=3,max=100"`
-	Description string   `json:"description" validate:"max=500"`
-	RoomType    string   `json:"room_type" validate:"required,oneof=group direct channel"`
-	IsPrivate   *bool    `json:"is_private" validate:"required"` // Menggunakan pointer *bool untuk membedakan antara false dan tidak diisi.
-	Members     []string `json:"members" validate:"omitempty"`   // Daftar UserID member awal (opsional)
+	Name        string   `json:"name" binding:"required,min=3,max=100"`
+	Description string   `json:"description" binding:"max=500"`
+	RoomType    string   `json:"room_type" binding:"required,oneof=group direct channel"`
+	IsPrivate   *bool    `json:"is_private" binding:"required"` // Menggunakan pointer *bool untuk membedakan antara false dan tidak diisi.
+	Members     []string `json:"members" binding:"omitempty"`   // Daftar UserID member awal (opsional)
 }
 
 func (r *CreateRoomRequest) ToModel(id string) (*models.Room, error) {
@@ -41,16 +41,22 @@ func (r *CreateRoomRequest) ToModel(id string) (*models.Room, error) {
 }
 
 type CreateDirectRoomRequest struct {
-	TargetUserId string `json:"target_user_id" validate:"required,uuid"`
-	MessageType  string `json:"message_type" validate:"required,oneof=text image file"`
-	Content      string `json:"content" validate:"required"`
+	TargetUserId string `json:"target_user_id" binding:"required,uuid"`
+	MessageType  string `json:"message_type" binding:"required,oneof=text image file"`
+	Content      string `json:"content" binding:"required"`
 }
 
 type UpdateRoomRequest struct {
-	Name        *string `json:"name" validate:"omitempty,min=3,max=100"`
-	Description *string `json:"description" validate:"omitempty,max=500"`
+	Name        *string `json:"name" binding:"omitempty,min=3,max=100"`
+	Description *string `json:"description" binding:"omitempty,max=500"`
 }
 
 type GetRoomByName struct {
-	Name string `json:"name" validate:"required,min=3,max=100"`
+	Name string `json:"name" binding:"required,min=3,max=100"`
+}
+
+type MetaFIlePicture struct {
+	RoomId      string `json:"room_id" binding:"required,uuid"`
+	ContentType string `json:"content_type" binding:"required"`
+	NameFile    string `json:"name_file" binding:"required"`
 }

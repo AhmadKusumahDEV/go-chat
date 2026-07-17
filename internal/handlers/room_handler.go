@@ -26,11 +26,49 @@ type HandlerRoom interface {
 	HandlerDeleteRoom(c *gin.Context)
 	HandleCreateDirectRoom(c *gin.Context)
 	HandleCheckDirectRoom(c *gin.Context)
-	UploadRoomAvatar(c *gin.Context)
+	GeneratePresignedUrl(c *gin.Context)
+	HandlerUpdateAvatarRoom(c *gin.Context)
 }
 
 type HandlerRoomImpl struct {
 	srv services.RoomService
+}
+
+// GeneratePresignedUrl implements [HandlerRoom].
+func (r *HandlerRoomImpl) GeneratePresignedUrl(c *gin.Context) {
+	userId, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found",
+		})
+		return
+	}
+
+	var payload request.MetaFIlePicture
+	err := c.ShouldBindJSON(&payload)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ApiResponse{
+			Status:  http.StatusBadRequest,
+			Message: "data yang dikirim tidak valid",
+		})
+		return
+	}
+
+	result, err := r.srv.GeneratePresignedPutUrl(c.Request.Context(), payload, userId.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Data:    result,
+		Message: "success",
+	})
 }
 
 // HandleCheckDirectRoom implements [HandlerRoom].
@@ -419,7 +457,7 @@ func (r *HandlerRoomImpl) HandleGetRoomDetail(c *gin.Context) {
 	})
 }
 
-func (r *HandlerRoomImpl) UploadRoomAvatar(c *gin.Context) {
+func (r *HandlerRoomImpl) HandlerUpdateAvatarRoom(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	roomID := c.Param("id")

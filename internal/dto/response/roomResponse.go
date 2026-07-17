@@ -41,6 +41,11 @@ type RoomDetailResponse struct {
 	Members     []MemberDetailResponse `json:"members"`
 }
 
+type PresignedResponse struct {
+	ObjectName string `json:"object_key"`
+	Url        string `json:"presigned_url"`
+}
+
 // MemberDetailResponse untuk menampilkan detail member dalam room
 type MemberDetailResponse struct {
 	UserID    string    `json:"user_id"`

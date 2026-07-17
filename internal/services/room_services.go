@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -33,6 +34,7 @@ type RoomService interface {
 	GetRoomByName(ctx context.Context, room_name request.GetRoomByName) ([]*response.RoomResponse, error)
 	GetRoomDetail(ctx context.Context, roomID string, userID string) (*response.RoomDetailResponse, error)
 	UpdateAvatar(ctx context.Context, roomID, userID string, reader io.Reader, size int64, contentType, objectName string) (string, error)
+	GeneratePresignedPutUrl(ctx context.Context, payload request.MetaFIlePicture, userId string) (response.PresignedResponse, error)
 }
 
 type RoomServiceImpl struct {
@@ -54,6 +56,38 @@ func NewRoomServices(roomRepository repository.RepositoryRoom, memberRepository 
 		validate:         validate,
 		minioS3:          minio,
 	}
+}
+
+func (r *RoomServiceImpl) GeneratePresignedPutUrl(ctx context.Context, payload request.MetaFIlePicture, userId string) (response.PresignedResponse, error) {
+	member, err := r.memberRepository.FindMember(ctx, payload.RoomId, userId)
+	if err != nil {
+		return response.PresignedResponse{}, fmt.Errorf("forbidden: you are not a member of this room: %w", err)
+	}
+
+	if member.Role != "admin" {
+		return response.PresignedResponse{}, errors.New("forbidden: only admin can change room avatar")
+	}
+
+	objectName := fmt.Sprintf("rooms/%s/avatar_%d%s",
+		payload.RoomId,
+		time.Now().Unix(),
+		filepath.Ext(payload.NameFile),
+	)
+
+	err = r.roomRepository.UpdateProfilePicture(ctx, payload.RoomId, userId, objectName)
+	if err != nil {
+		return response.PresignedResponse{}, err
+	}
+
+	result, err := r.minioS3.GeneratePresigneUrl(ctx, objectName)
+	if err != nil {
+		return response.PresignedResponse{}, err
+	}
+
+	return response.PresignedResponse{
+		ObjectName: objectName,
+		Url:        result,
+	}, nil
 }
 
 // GetSpecificRoomByUserID implements [RoomService].
@@ -322,7 +356,7 @@ func (r *RoomServiceImpl) UpdateRoom(ctx context.Context, roomID string, userID 
 		existingRoom.Name = *req.Name
 	}
 
-	if req.Description != nil && *req.Description != "" {
+	if req.Description != nil {
 		existingRoom.Description = *req.Description
 	}
 

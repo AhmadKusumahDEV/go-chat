@@ -645,8 +645,10 @@ func (p *RepositoryRoomImpl) UpdateProfilePicture(ctx context.Context, roomID, u
 	query := `UPDATE rooms SET avatar_url = $1 WHERE id = $2`
 	result, err := p.db.ExecContext(ctx, query, avatarURL, roomID)
 	if err != nil {
-		return err
+		log.Println(err)
+		return errors.New("error on server")
 	}
+
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return errors.New("room not found")

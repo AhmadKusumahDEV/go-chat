@@ -185,7 +185,6 @@ func (r *RabbitMQ) handleReconnect() {
 		case <-r.conn.NotifyClose(make(chan *amqp091.Error)):
 			log.Println("⚠️ RabbitMQ connection lost, reconnecting...")
 
-			// Try to reconnect
 			for {
 				time.Sleep(r.config.ReconnectDelay)
 

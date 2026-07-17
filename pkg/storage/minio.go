@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/config"
@@ -134,4 +135,23 @@ func (m *minioStorage) GetObjectURL(ctx context.Context, objectName string, buck
 	}
 
 	return fmt.Sprintf("%s/%s/%s", m.baseURL, bucketName, objectName), nil
+}
+
+func (m *minioStorage) GeneratePresigneUrl(ctx context.Context, objectName string) (string, error) {
+	presignedUrl, err := m.client.PresignedPutObject(ctx, "chat-app", objectName, 10*time.Minute)
+	if err != nil {
+		log.Println(err)
+		return "", errors.New("got error when generate url")
+	}
+
+	baseURL, err := url.Parse(m.baseURL)
+	if err != nil {
+		log.Println(err)
+		return "", errors.New("invalid base url configuration")
+	}
+
+	presignedUrl.Scheme = baseURL.Scheme
+	presignedUrl.Host = baseURL.Host
+	presignedUrl.Path = strings.TrimSuffix(baseURL.Path, "/") + presignedUrl.Path
+	return presignedUrl.String(), nil
 }

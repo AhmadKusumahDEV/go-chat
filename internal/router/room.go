@@ -25,7 +25,7 @@ func (r *RoomRoutes) RegisterRoutes(router *gin.Engine, srv *config.Server) {
 	roomgroup.POST("/", r.handle.HandleCreateRoom)
 	roomgroup.POST("/direct", r.handle.HandleCreateDirectRoom)
 
-	roomgroup.PATCH("/avatar/:id", r.handle.UploadRoomAvatar)
+	roomgroup.PATCH("/avatar/:id", r.handle.HandlerUpdateAvatarRoom)
 	roomgroup.PATCH("/:id", r.handle.HandlerUpdatedRoom)
 
 	roomgroup.DELETE("/:id", r.handle.HandlerDeleteRoom)
