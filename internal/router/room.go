@@ -24,6 +24,7 @@ func (r *RoomRoutes) RegisterRoutes(router *gin.Engine, srv *config.Server) {
 
 	roomgroup.POST("/", r.handle.HandleCreateRoom)
 	roomgroup.POST("/direct", r.handle.HandleCreateDirectRoom)
+	roomgroup.POST("/presigned-url", r.handle.GeneratePresignedUrl)
 
 	roomgroup.PATCH("/avatar/:id", r.handle.HandlerUpdateAvatarRoom)
 	roomgroup.PATCH("/:id", r.handle.HandlerUpdatedRoom)
