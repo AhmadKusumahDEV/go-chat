@@ -63,6 +63,10 @@ func (o *OrderServicesImpl) AddOrder(ctx context.Context, userId string) (*respo
 		return &response.SnapResponse{}, errors.New("User Tidak ditemukan")
 	}
 
+	if !user.Verify.Bool {
+		return &response.SnapResponse{}, errors.New("User belum terverifikasi")
+	}
+
 	orderId := models.GenerateOrderID(time.Now())
 	req, expiredDb := CreateDataTransaction(orderId, user, &o.cfg)
 
