@@ -9,6 +9,31 @@ import (
 	"github.com/rabbitmq/amqp091-go"
 )
 
+type Exchange struct {
+	Name       string `mapstructure:"name"`
+	Kind       string `mapstructure:"kind"`
+	Durable    bool   `mapstructure:"durable"`
+	AutoDelete bool   `mapstructure:"auto_delete"`
+	Internal   bool   `mapstructure:"internal"`
+	NoWait     bool   `mapstructure:"no_wait"`
+	Arguments  any    `mapstructure:"arguments"`
+}
+
+type Binding struct {
+	Exchange string `mapstructure:"exchange"`
+	Key      string `mapstructure:"key"`
+	Routing  string `mapstructure:"routing"`
+}
+
+type Queue struct {
+	Name       string `mapstructure:"name"`
+	Durable    bool   `mapstructure:"durable"`
+	AutoDelete bool   `mapstructure:"auto_delete"`
+	Exclusive  bool   `mapstructure:"exclusive"`
+	NoWait     bool   `mapstructure:"no_wait"`
+	Arguments  any    `mapstructure:"arguments"`
+}
+
 type RabbitMQConfig struct {
 	URL            string        `mapstructure:"url"`
 	MaxChannels    int           `mapstructure:"max_channels"`
@@ -17,6 +42,7 @@ type RabbitMQConfig struct {
 	PrefetchSize   int           `mapstructure:"prefetch_size"`
 	Heartbeat      time.Duration `mapstructure:"heartbeat"`
 	ConnectionName string        `mapstructure:"connection_name"`
+	Exchange       []Exchange    `mapstructure:"exchange"`
 }
 
 type RabbitMQ struct {
