@@ -64,40 +64,40 @@ func NewNotificationWorker(
 
 // Start - Running terus menerus
 func (w *NotificationWorker) Start(ctx context.Context) error {
-	q, err := w.rabbitmq.QueueDeclare(
-		"push-notifications",
-		true,
-		false,
-		false,
-		false,
-		amqp091.Table{
-			"x-dead-letter-exchange": "chat.dlx",
-		},
-	)
-	if err != nil {
-		return err
-	}
+	// q, err := w.rabbitmq.QueueDeclare(
+	// 	"push-notifications",
+	// 	true,
+	// 	false,
+	// 	false,
+	// 	false,
+	// 	amqp091.Table{
+	// 		"x-dead-letter-exchange": "chat.dlx",
+	// 	},
+	// )
+	// if err != nil {
+	// 	return err
+	// }
 
-	err = w.rabbitmq.QueueBind(
-		q.Name,
-		"notification.#", // routing key pattern (# matches 0 or more words)
-		"chat.notifications",
-		false,
-		nil,
-	)
-	if err != nil {
-		return err
-	}
+	// err = w.rabbitmq.QueueBind(
+	// 	q.Name,
+	// 	"notification.#", // routing key pattern (# matches 0 or more words)
+	// 	"chat.notifications",
+	// 	false,
+	// 	nil,
+	// )
+	// if err != nil {
+	// 	return err
+	// }
 
-	log.Printf("✅ Queue %q bound to exchange %q with routing key %q", q.Name, "chat.notifications", "notification.#")
+	// log.Printf("✅ Queue %q bound to exchange %q with routing key %q", q.Name, "chat.notifications", "notification.#")
 
-	err = w.rabbitmq.Qos(5, 0, false)
-	if err != nil {
-		return err
-	}
+	// err = w.rabbitmq.Qos(5, 0, false)
+	// if err != nil {
+	// 	return err
+	// }
 
 	msgs, err := w.rabbitmq.Consume(
-		q.Name,
+		"push-notifications",
 		"notification-worker",
 		false, // manual ack
 		false,

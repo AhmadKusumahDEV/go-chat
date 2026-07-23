@@ -28,43 +28,43 @@ func NewMessageWorker(
 
 func (w *MessageWorker) Start(ctx context.Context) error {
 	// 1. Declare queue
-	q, err := w.rabbitmq.QueueDeclare(
-		"message-persistence",
-		true,
-		false,
-		false,
-		false,
-		amqp091.Table{
-			"x-dead-letter-exchange": "chat.dlx",
-		},
-	)
-	if err != nil {
-		return err
-	}
+	// q, err := w.rabbitmq.QueueDeclare(
+	// 	"message-persistence",
+	// 	true,
+	// 	false,
+	// 	false,
+	// 	false,
+	// 	amqp091.Table{
+	// 		"x-dead-letter-exchange": "chat.dlx",
+	// 	},
+	// )
+	// if err != nil {
+	// 	return err
+	// }
 
-	err = w.rabbitmq.QueueBind(
-		q.Name,
-		"",
-		"chat.messages",
-		false,
-		nil,
-	)
-	if err != nil {
-		return err
-	}
+	// err = w.rabbitmq.QueueBind(
+	// 	q.Name,
+	// 	"",
+	// 	"chat.messages",
+	// 	false,
+	// 	nil,
+	// )
+	// if err != nil {
+	// 	return err
+	// }
 
-	err = w.rabbitmq.Qos(
-		10,
-		0,
-		false,
-	)
-	if err != nil {
-		return err
-	}
+	// err = w.rabbitmq.Qos(
+	// 	10,
+	// 	0,
+	// 	false,
+	// )
+	// if err != nil {
+	// 	return err
+	// }
 
 	// 4. Start consuming
 	msgs, err := w.rabbitmq.Consume(
-		q.Name,
+		"message-persistence",
 		"message-persistence-worker",
 		false,
 		false,

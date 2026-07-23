@@ -10,28 +10,31 @@ import (
 )
 
 type Exchange struct {
-	Name       string `mapstructure:"name"`
-	Kind       string `mapstructure:"kind"`
-	Durable    bool   `mapstructure:"durable"`
-	AutoDelete bool   `mapstructure:"auto_delete"`
-	Internal   bool   `mapstructure:"internal"`
-	NoWait     bool   `mapstructure:"no_wait"`
-	Arguments  any    `mapstructure:"arguments"`
+	Name       string          `mapstructure:"name"`
+	Kind       string          `mapstructure:"kind"`
+	Durable    bool            `mapstructure:"durable"`
+	AutoDelete bool            `mapstructure:"auto_delete"`
+	Internal   bool            `mapstructure:"internal"`
+	NoWait     bool            `mapstructure:"no_wait"`
+	Arguments  *map[string]any `mapstructure:"arguments"`
 }
 
 type Binding struct {
-	Exchange string `mapstructure:"exchange"`
-	Key      string `mapstructure:"key"`
-	Routing  string `mapstructure:"routing"`
+	Name      string          `mapstructure:"name"`
+	Key       string          `mapstructure:"key"`
+	Exchange  string          `mapstructure:"exchange"`
+	NoWait    bool            `mapstructure:"no_wait"`
+	Arguments *map[string]any `mapstructure:"arguments"`
 }
 
 type Queue struct {
-	Name       string `mapstructure:"name"`
-	Durable    bool   `mapstructure:"durable"`
-	AutoDelete bool   `mapstructure:"auto_delete"`
-	Exclusive  bool   `mapstructure:"exclusive"`
-	NoWait     bool   `mapstructure:"no_wait"`
-	Arguments  any    `mapstructure:"arguments"`
+	Name       string          `mapstructure:"name"`
+	Durable    bool            `mapstructure:"durable"`
+	AutoDelete bool            `mapstructure:"auto_delete"`
+	Exclusive  bool            `mapstructure:"exclusive"`
+	NoWait     bool            `mapstructure:"no_wait"`
+	Bindings   []Binding       `mapstructure:"bindings"`
+	Arguments  *map[string]any `mapstructure:"arguments"`
 }
 
 type RabbitMQConfig struct {
@@ -42,7 +45,8 @@ type RabbitMQConfig struct {
 	PrefetchSize   int           `mapstructure:"prefetch_size"`
 	Heartbeat      time.Duration `mapstructure:"heartbeat"`
 	ConnectionName string        `mapstructure:"connection_name"`
-	Exchange       []Exchange    `mapstructure:"exchange"`
+	Exchange       []Exchange    `mapstructure:"exchanges"`
+	Queue          []Queue       `mapstructure:"queues"`
 }
 
 type RabbitMQ struct {
@@ -145,58 +149,124 @@ func (r *RabbitMQ) connect() error {
 func (r *RabbitMQ) setupTopology() error {
 	log.Println("🔧 Setting up RabbitMQ topology...")
 
-	// 1. Declare exchanges
-	exchanges := []struct {
-		name       string
-		kind       string
-		durable    bool
-		autoDelete bool
-	}{
-		{"chat.messages", "fanout", true, false},
-		{"chat.notifications", "topic", true, false},
-		{"chat.dlx", "fanout", true, false}, // Dead Letter Exchange
-	}
+	// // 1. Declare exchanges
+	// exchanges := []struct {
+	// 	name       string
+	// 	kind       string
+	// 	durable    bool
+	// 	autoDelete bool
+	// }{
+	// 	{"chat.messages", "fanout", true, false},
+	// 	{"chat.notifications", "topic", true, false},
+	// 	{"chat.dlx", "fanout", true, false}, // Dead Letter Exchange
+	// }
 
-	for _, ex := range exchanges {
+	// for _, ex := range exchanges {
+	// 	err := r.channel.ExchangeDeclare(
+	// 		ex.name,
+	// 		ex.kind,
+	// 		ex.durable,
+	// 		ex.autoDelete,
+	// 		false, // internal
+	// 		false, // no-wait
+	// 		nil,
+	// 	)
+	// 	if err != nil {
+	// 		return fmt.Errorf("failed to declare exchange %s: %w", ex.name, err)
+	// 	}
+	// 	log.Printf("✅ Exchange declared: %s (%s)", ex.name, ex.kind)
+	// }
+
+	for j := range r.config.Exchange {
+		var args amqp091.Table
+
+		if r.config.Exchange[j].Arguments != nil {
+			args = *r.config.Exchange[j].Arguments
+		}
+
 		err := r.channel.ExchangeDeclare(
-			ex.name,
-			ex.kind,
-			ex.durable,
-			ex.autoDelete,
-			false, // internal
-			false, // no-wait
-			nil,
+			r.config.Exchange[j].Name,
+			r.config.Exchange[j].Kind,
+			r.config.Exchange[j].Durable,
+			r.config.Exchange[j].AutoDelete,
+			r.config.Exchange[j].Internal,
+			r.config.Exchange[j].NoWait,
+			args,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to declare exchange %s: %w", ex.name, err)
+			return fmt.Errorf("failed to declare exchange %s: %w", r.config.Exchange[j].Name, err)
 		}
-		log.Printf("✅ Exchange declared: %s (%s)", ex.name, ex.kind)
+		log.Printf("✅ Exchange declared: %s (%s)", r.config.Exchange[j].Name, r.config.Exchange[j].Kind)
 	}
 
-	// 2. Declare Dead Letter Queue
-	_, err := r.channel.QueueDeclare(
-		"chat.dlq", // queue name
-		true,       // durable
-		false,      // delete when unused
-		false,      // exclusive
-		false,      // no-wait
-		nil,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to declare DLQ: %w", err)
+	for q := range r.config.Queue {
+		var args amqp091.Table
+
+		if r.config.Queue[q].Arguments != nil {
+			args = *r.config.Queue[q].Arguments
+		}
+
+		_, err := r.channel.QueueDeclare(
+			r.config.Queue[q].Name,
+			r.config.Queue[q].Durable,
+			r.config.Queue[q].AutoDelete,
+			r.config.Queue[q].Exclusive,
+			r.config.Queue[q].NoWait,
+			args,
+		)
+
+		if err != nil {
+			return fmt.Errorf("failed to declare DLQ: %w", err)
+		}
+
+		for b := range r.config.Queue[q].Bindings {
+			var bindArgs amqp091.Table
+
+			if r.config.Queue[q].Bindings[b].Arguments != nil {
+				bindArgs = *r.config.Queue[q].Bindings[b].Arguments
+			}
+
+			err = r.channel.QueueBind(
+				r.config.Queue[q].Name,
+				r.config.Queue[q].Bindings[b].Key,
+				r.config.Queue[q].Bindings[b].Exchange,
+				r.config.Queue[q].Bindings[b].NoWait,
+				bindArgs,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to bind queue %s: %w", r.config.Queue[q].Name, err)
+			}
+		}
 	}
 
-	// Bind DLQ to DLX
-	err = r.channel.QueueBind(
-		"chat.dlq",
-		"",
-		"chat.dlx",
-		false,
-		nil,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to bind DLQ: %w", err)
-	}
+	// for q := range r.config.Queue {
+
+	// }
+
+	// // 2. Declare Dead Letter Queue
+	// _, err := r.channel.QueueDeclare(
+	// 	"chat.dlq", // queue name
+	// 	true,       // durable
+	// 	false,      // delete when unused
+	// 	false,      // exclusive
+	// 	false,      // no-wait
+	// 	nil,
+	// )
+	// if err != nil {
+	// 	return fmt.Errorf("failed to declare DLQ: %w", err)
+	// }
+
+	// // Bind DLQ to DLX
+	// err = r.channel.QueueBind(
+	// 	"chat.dlq",
+	// 	"",
+	// 	"chat.dlx",
+	// 	false,
+	// 	nil,
+	// )
+	// if err != nil {
+	// 	return fmt.Errorf("failed to bind DLQ: %w", err)
+	// }
 
 	log.Println("✅ RabbitMQ topology setup complete")
 	return nil
