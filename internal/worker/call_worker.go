@@ -104,6 +104,11 @@ func (w *CallNotificationWorker) TriggerNotificationCall(event *amqp091.Delivery
 	duration := time.Duration(45 * time.Second)
 
 	callMessage := &messaging.Message{
+		Notification: &messaging.Notification{
+			Title: "Incoming Call",
+			Body:  data.CallerName + " is calling you",
+		},
+
 		Data: map[string]string{
 			"type":        "incoming_call",
 			"call_id":     data.CallId,
