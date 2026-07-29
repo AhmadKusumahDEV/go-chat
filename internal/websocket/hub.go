@@ -26,6 +26,7 @@ type WebSocketHub interface {
 	BroadcastToAllUsers(message []byte)
 	GetAllConnectedUsers() []string
 	handleRegisterNewDirectRoom(client *Client, targetID string, roomID string) *Client
+	CheckUserActive(userID string) bool
 }
 
 // Hub implements WebSocketHub interface
@@ -312,4 +313,17 @@ func (h *Hub) GetAllConnectedUsers() []string {
 		users = append(users, client.UserID)
 	}
 	return users
+}
+
+// CheckUserActive implements [WebSocketHub].
+func (h *Hub) CheckUserActive(userID string) bool {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	for client := range h.client {
+		if client.UserID == userID {
+			return true
+		}
+	}
+	return false
 }

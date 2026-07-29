@@ -65,11 +65,16 @@ func main() {
 	roomRepo := repository.NewRoomRepository(db)
 
 	notificationWorker := worker.NewNotificationWorker(workerChannel, fcmClient, userRepo, messageRepo, firebaseRepo, memberRepo, roomRepo)
+	CallNotificationWorker := worker.NewCallNotificationWorker(workerChannel, fcmClient, userRepo, messageRepo, firebaseRepo, memberRepo, roomRepo)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	if err := notificationWorker.Start(ctx); err != nil {
+		log.Fatalf("❌ Failed to start notification worker: %v", err)
+	}
+
+	if err := CallNotificationWorker.Start(ctx); err != nil {
 		log.Fatalf("❌ Failed to start notification worker: %v", err)
 	}
 

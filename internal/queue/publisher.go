@@ -12,6 +12,8 @@ import (
 type Publisher interface {
 	PublishMessage(ctx context.Context, event *MessageEvent) error
 	PublishNotification(ctx context.Context, event interface{}) error
+	PublishEventSocket(ctx context.Context, event interface{}) error
+	PublishEventCall(ctx context.Context, event interface{}) error
 }
 
 type MessageEvent struct {
@@ -38,6 +40,50 @@ type rabbitMQPublisher struct {
 
 func NewRabbitMQPublisher(channel *amqp.Channel) Publisher {
 	return &rabbitMQPublisher{channel: channel}
+}
+
+// PublishEventCall implements [Publisher].
+func (p *rabbitMQPublisher) PublishEventCall(ctx context.Context, event interface{}) error {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	return p.channel.PublishWithContext(
+		ctx,
+		"chat.notifications", // exchange
+		"call.event",         // routing key
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			Body:         body,
+			DeliveryMode: amqp.Persistent,
+			Timestamp:    time.Now(),
+		},
+	)
+}
+
+// PublishEventSocket implements [Publisher].
+func (p *rabbitMQPublisher) PublishEventSocket(ctx context.Context, event interface{}) error {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	return p.channel.PublishWithContext(
+		ctx,
+		"chat.notifications", // exchange
+		"socket.event",       // routing key
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			Body:         body,
+			DeliveryMode: amqp.Persistent,
+			Timestamp:    time.Now(),
+		},
+	)
 }
 
 func (p *rabbitMQPublisher) PublishMessage(ctx context.Context, event *MessageEvent) error {

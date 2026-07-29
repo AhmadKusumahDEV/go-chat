@@ -16,6 +16,7 @@ type RepositoryFirebase interface {
 
 	CreateFcmToken(ctx context.Context, firebase *models.Firebase) error
 	GetTokensByUserIDs(ctx context.Context, userIDs []string) ([]string, error)
+	GetTokensByUserID(ctx context.Context, userID string) (string, error)
 	DeactivateToken(ctx context.Context, fcmToken string) error
 	DeactivateTokenByUserID(ctx context.Context, userID string, fcmToken string) (int, error)
 	DeactivateTokens(ctx context.Context, tokens []string) (int, error)
@@ -25,6 +26,24 @@ type RepositoryFirebase interface {
 type RepositoryFirebaseImpl struct {
 	RepositoryBased[*models.Firebase]
 	db *sql.DB
+}
+
+func (r *RepositoryFirebaseImpl) GetTokensByUserID(ctx context.Context, userID string) (string, error) {
+	qGetToken := `
+		SELECT fcm_token
+		FROM user_devices
+		WHERE user_id = $1
+		AND is_active = TRUE;
+	`
+
+	var token string
+
+	err := r.db.QueryRowContext(ctx, qGetToken, userID).Scan(&token)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
+
+	return token, nil
 }
 
 // CreateFcmToken implements [RepositoryFirebase].

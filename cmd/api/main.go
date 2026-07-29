@@ -129,7 +129,7 @@ func main() {
 	memberServices := services.NewMemberServices(roomRepository, memberRepository, usersRepository, messageRepository, newClientRedis, validate)
 	orderServices := services.NewOrderServices(cfg, usersRepository, httpClient, orderRepository, rds)
 
-	manager := websocket.NewWebSocketManager(messageServices, roomServices, publisher)
+	manager := websocket.NewWebSocketManager(messageServices, roomServices, publisher, rmq.GetChannel(), usersServices)
 	manager.Start()
 	wsHandler := handlers.NewWebsocketHandler(manager, roomServices)
 	wsRouter := router.NewWebsocketRouter(wsHandler)

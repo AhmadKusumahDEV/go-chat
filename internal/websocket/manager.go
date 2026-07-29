@@ -9,7 +9,9 @@ import (
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
 	"github.com/AhmadKusumahDEV/go-chat/internal/queue"
+	"github.com/gofrs/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/rabbitmq/amqp091-go"
 )
 
 type WebSocketManager interface {
@@ -27,6 +29,10 @@ type WebSocketManager interface {
 	BroadcastToRoom(roomID string, message []byte)
 	BroadcastToRoomExcept(roomID string, message []byte, exceptUserID string)
 	MessageByID(messageID string) (*response.MessageResponse, error)
+}
+
+type UserSpecifiedRequirements interface {
+	GetDetailUser(ctx context.Context, userId uuid.UUID) (*response.UserResponse, error)
 }
 
 // WebSocketManagerImpl implements WebSocketManager interface
@@ -54,10 +60,80 @@ type BroadcastMessage struct {
 	Type     string          `json:"type,omitempty"`
 }
 
+type CallerSendOffer struct {
+	CallId       string `json:"call_id"`
+	TargetUserId string `json:"target_user_id"`
+	Sdp          string `json:"sdp"`
+	Mode         string `json:"mode"`
+}
+
+type CallerforwardOffer struct {
+	CallId       string  `json:"call_id"`
+	TargetUserId string  `json:"target_user_id,omitempty"`
+	CallerName   string  `json:"caller_name"`
+	CallerId     string  `json:"caller_id"`
+	Avatar       *string `json:"avatar,omitempty"`
+	Sdp          string  `json:"sdp"`
+	Mode         string  `json:"mode"`
+}
+
+type CallSendAnswer struct {
+	CallId       string `json:"call_id"`
+	TargetUserId string `json:"target_user_id"` // send back to caller init
+	Sdp          string `json:"sdp"`
+}
+
+type CallForwardAnswer struct {
+	CallId string `json:"call_id"`
+	Sdp    string `json:"sdp"`
+}
+
+type CallSendIce struct {
+	CallId       string    `json:"call_id"`
+	TargetUserId string    `json:"target_user_id"`
+	Candidate    Candidate `json:"candidate"`
+}
+
+type CallForwardIce struct {
+	CallId    string    `json:"call_id"`
+	Candidate Candidate `json:"candidate"`
+}
+
+type CallSendHangup struct {
+	CallId       string `json:"call_id"`
+	TargetUserId string `json:"target_user_id"`
+}
+
+type CallForwardHangup struct {
+	CallId string `json:"call_id"`
+}
+
+type CallSendMute struct {
+	CallId       string `json:"call_id"`
+	TargetUserId string `json:"target_user_id"`
+	Muted        bool   `json:"muted"`
+}
+
+type CallForwardMute struct {
+	CallId string `json:"call_id"`
+	Muted  bool   `json:"muted"`
+}
+
+type FormatFowardEvent struct {
+	Type string `json:"type"`
+	Data any    `json:"data"`
+}
+
+type Candidate struct {
+	Candidate     string `json:"candidate"`
+	SdpMLineIndex string `json:"sdpMLineIndex"`
+	SdpMid        string `json:"sdpMid"`
+}
+
 // NewWebSocketManager creates a new WebSocket manager
-func NewWebSocketManager(messageService MessageSender, room GetRoomSpecifice, publisher queue.Publisher) WebSocketManager {
+func NewWebSocketManager(messageService MessageSender, room GetRoomSpecifice, publisher queue.Publisher, channel *amqp091.Channel, userServices UserSpecifiedRequirements) WebSocketManager {
 	hub := NewHub()
-	processor := NewMessageProcessor(10, hub, messageService, room, publisher)
+	processor := NewMessageProcessor(10, hub, messageService, room, publisher, channel, userServices)
 
 	manager := &WebSocketManagerImpl{
 		hub:       hub,
