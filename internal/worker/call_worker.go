@@ -114,6 +114,11 @@ func (w *CallNotificationWorker) TriggerNotificationCall(event *amqp091.Delivery
 			"mode":        data.Mode,
 		},
 
+		Notification: &messaging.Notification{
+			Title: "Incoming Call",
+			Body:  data.CallerName + " is calling you",
+		},
+
 		Android: &messaging.AndroidConfig{
 			Priority: "high",
 			TTL:      &duration,
