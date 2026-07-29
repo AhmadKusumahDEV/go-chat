@@ -57,6 +57,8 @@ func (w *CallNotificationWorker) Start(ctx context.Context) error {
 		return nil
 	}
 
+	log.Println("✅ CallWorker started, waiting for messages...")
+
 	go func() {
 		for {
 			select {

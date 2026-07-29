@@ -126,8 +126,8 @@ type FormatFowardEvent struct {
 
 type Candidate struct {
 	Candidate     string `json:"candidate"`
-	SdpMLineIndex string `json:"sdpMLineIndex"`
-	SdpMid        string `json:"sdpMid"`
+	SdpMLineIndex int    `json:"sdpMLineIndex"`
+	SdpMid        int    `json:"sdpMid"`
 }
 
 // NewWebSocketManager creates a new WebSocket manager

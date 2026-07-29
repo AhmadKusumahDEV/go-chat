@@ -205,13 +205,13 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 				return
 			}
 
-			userId, err := uuid.FromString(broadcastMsg.SenderID)
+			senderId, err := uuid.FromString(msg.UserID)
 			if err != nil {
 				log.Println("invalid sender user id:", err)
 				return
 			}
 
-			userInfo, err := mp.userServices.GetDetailUser(ctx, userId)
+			userInfo, err := mp.userServices.GetDetailUser(ctx, senderId)
 			if err != nil {
 				log.Println("failed get user detail:", err)
 				return
@@ -221,7 +221,7 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 				CallId:       payload.CallId,
 				TargetUserId: payload.TargetUserId,
 				CallerName:   userInfo.Username,
-				CallerId:     broadcastMsg.SenderID,
+				CallerId:     msg.UserID,
 				Avatar:       userInfo.AvatarUrl,
 				Sdp:          payload.Sdp,
 				Mode:         payload.Mode,
@@ -246,7 +246,7 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 				Sdp:    payload.Sdp,
 			}
 
-		case strings.HasSuffix(broadcastMsg.Type, ".ice"): // ✅ Typo kuot kutip (') diperbaiki
+		case strings.HasSuffix(broadcastMsg.Type, ".ice"):
 			var payload CallSendIce
 			if err := json.Unmarshal(broadcastMsg.Data, &payload); err != nil {
 				log.Println("error marshal ice payload:", err)
@@ -265,7 +265,7 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 				return
 			}
 			targetUserID = payload.TargetUserId
-			forwardData = CallForwardMute{ // ✅ Nama variabel dirapikan
+			forwardData = CallForwardMute{
 				CallId: payload.CallId,
 				Muted:  payload.Muted,
 			}
@@ -277,7 +277,7 @@ func (mp *MessageProcessorImpl) processMessage(msg *ProcessMessage) {
 				return
 			}
 			targetUserID = payload.TargetUserId
-			forwardData = CallForwardHangup{ // ✅ Nama variabel dirapikan
+			forwardData = CallForwardHangup{
 				CallId: payload.CallId,
 			}
 
