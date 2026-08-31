@@ -13,6 +13,7 @@ import (
 type OrderRepository interface {
 	CreateOrder(ctx context.Context, order *models.Order) error
 	GetOrderByUserId(ctx context.Context, userID string) ([]*models.Order, error)
+	GetOrderByOrderID(ctx context.Context, orderID string) (*models.Order, error)
 	GetActiveOrder(ctx context.Context, userID string) (sql.NullString, error)
 	UpdatedOrder(ctx context.Context, order *models.Order) error
 }
@@ -34,6 +35,8 @@ func (o *OrderRepositoryImpl) UpdatedOrder(ctx context.Context, order *models.Or
 		plan          string
 	)
 
+	defer tx.Rollback()
+
 	err = tx.QueryRowContext(ctx,
 		`
 	select 
@@ -49,8 +52,6 @@ func (o *OrderRepositoryImpl) UpdatedOrder(ctx context.Context, order *models.Or
 		log.Println(err)
 		return errors.New("order id not found")
 	}
-
-	defer tx.Rollback()
 
 	if order.Status == models.OrderStatus(currentStatus) {
 		return models.ErrSameStatus
@@ -69,13 +70,13 @@ func (o *OrderRepositoryImpl) UpdatedOrder(ctx context.Context, order *models.Or
 		updated_at = now(),
 		webhook_payload = $2,
 		gateway_tx_id = $3,
-		paid_at = now(),
+		paid_at = $6,
 		payment_method = $5
 	where 
 		order_id = $4
 	`
 
-	_, err = tx.ExecContext(ctx, query, order.Status, order.WebHookPayload, order.GatewayTxID.String, order.OrderID, order.PaymentMethod.String)
+	_, err = tx.ExecContext(ctx, query, order.Status, order.WebHookPayload, order.GatewayTxID.String, order.OrderID, order.PaymentMethod.String, order.PaidAt.Time)
 	if err != nil {
 		log.Println(err)
 		return errors.New("got error when updated to db")
@@ -194,6 +195,52 @@ func (o *OrderRepositoryImpl) CreateOrder(ctx context.Context, order *models.Ord
 	}
 
 	return nil
+}
+
+// GetOrderByOrderID retrieves an order by its order_id to get user information
+func (o *OrderRepositoryImpl) GetOrderByOrderID(ctx context.Context, orderID string) (*models.Order, error) {
+	query := `
+		select
+			o.order_id,
+			o.user_id,
+			o.plan,
+			o.gross_amount,
+			o.status,
+			o.snap_token,
+			o.payment_method,
+			o.expired_at,
+			u.username,
+			u.email
+		from
+			orders o
+		join
+			users u on o.user_id = u.id
+		where
+			o.order_id = $1
+		limit 1;
+	`
+
+	var order models.Order
+	err := o.db.QueryRowContext(ctx, query, orderID).Scan(
+		&order.OrderID,
+		&order.UserID,
+		&order.Plan,
+		&order.Amount,
+		&order.Status,
+		&order.SnapToken,
+		&order.PaymentMethod,
+		&order.ExpiretAt,
+		&order.Username,
+		&order.Email,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("order not found")
+		}
+		return nil, err
+	}
+
+	return &order, nil
 }
 
 func NewOrderRepository(db *sql.DB) OrderRepository {

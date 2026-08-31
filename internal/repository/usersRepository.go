@@ -17,6 +17,8 @@ type RepositoryUser interface {
 	FindByIDs(ctx context.Context, userIDs []string) ([]models.Users, error)
 	ChangeAvatar(ctx context.Context, userID, avatarURL string) error
 	UpdateVerifyUser(ctx context.Context, userID string) error
+	UpdateTierUser(ctx context.Context, userID string, tier string) error
+	ProfileUser(ctx context.Context, userID string) (models.Users, error)
 }
 
 type RepositoryUserImpl struct {
@@ -24,9 +26,43 @@ type RepositoryUserImpl struct {
 	db *sql.DB
 }
 
+func (r *RepositoryUserImpl) ProfileUser(ctx context.Context, userID string) (models.Users, error) {
+	var user models.Users
+	query := `
+	select 
+		id,
+		username,
+		email,
+		avatar_url,
+		about,
+		tier,
+		verify
+	from 
+		users
+	where 
+		id = $1;
+	`
+
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.AvatarUrl,
+		&user.About,
+		&user.Tier,
+		&user.Verify,
+	)
+
+	if err != nil {
+		return models.Users{}, err
+	}
+
+	return user, nil
+}
+
 func (r *RepositoryUserImpl) UpdateVerifyUser(ctx context.Context, userID string) error {
 	query := `
-	update 
+	update
 		users
 	set
 		verify = true
@@ -38,6 +74,32 @@ func (r *RepositoryUserImpl) UpdateVerifyUser(ctx context.Context, userID string
 		log.Println(err)
 		return errors.New("failed update user")
 	}
+	return nil
+}
+
+// UpdateTierUser updates the user's subscription tier (e.g., "free" -> "premium")
+func (r *RepositoryUserImpl) UpdateTierUser(ctx context.Context, userID string, tier string) error {
+	query := `
+	update
+		users
+	set
+		tier = $1,
+		updated_at = now()
+	where
+		id = $2
+	`
+	result, err := r.db.ExecContext(ctx, query, tier, userID)
+	if err != nil {
+		log.Println(err)
+		return errors.New("failed update user tier")
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return errors.New("user not found")
+	}
+
+	log.Printf("✅ User %s tier updated to %s", userID, tier)
 	return nil
 }
 

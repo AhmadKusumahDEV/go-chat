@@ -1,7 +1,7 @@
-// internal/config/rabbitmq.go
-package config
+package rabbitmq
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -9,52 +9,14 @@ import (
 	"github.com/rabbitmq/amqp091-go"
 )
 
-type Exchange struct {
-	Name       string          `mapstructure:"name"`
-	Kind       string          `mapstructure:"kind"`
-	Durable    bool            `mapstructure:"durable"`
-	AutoDelete bool            `mapstructure:"auto_delete"`
-	Internal   bool            `mapstructure:"internal"`
-	NoWait     bool            `mapstructure:"no_wait"`
-	Arguments  *map[string]any `mapstructure:"arguments"`
-}
-
-type Binding struct {
-	Name      string          `mapstructure:"name"`
-	Key       string          `mapstructure:"key"`
-	Exchange  string          `mapstructure:"exchange"`
-	NoWait    bool            `mapstructure:"no_wait"`
-	Arguments *map[string]any `mapstructure:"arguments"`
-}
-
-type Queue struct {
-	Name       string          `mapstructure:"name"`
-	Durable    bool            `mapstructure:"durable"`
-	AutoDelete bool            `mapstructure:"auto_delete"`
-	Exclusive  bool            `mapstructure:"exclusive"`
-	NoWait     bool            `mapstructure:"no_wait"`
-	Bindings   []Binding       `mapstructure:"bindings"`
-	Arguments  *map[string]any `mapstructure:"arguments"`
-}
-
-type RabbitMQConfig struct {
-	URL            string        `mapstructure:"url"`
-	MaxChannels    int           `mapstructure:"max_channels"`
-	ReconnectDelay time.Duration `mapstructure:"reconnect_delay"`
-	PrefetchCount  int           `mapstructure:"prefetch_count"`
-	PrefetchSize   int           `mapstructure:"prefetch_size"`
-	Heartbeat      time.Duration `mapstructure:"heartbeat"`
-	ConnectionName string        `mapstructure:"connection_name"`
-	Exchange       []Exchange    `mapstructure:"exchanges"`
-	Queue          []Queue       `mapstructure:"queues"`
-}
-
 type RabbitMQ struct {
 	conn    *amqp091.Connection
 	channel *amqp091.Channel
 	config  *RabbitMQConfig
 	done    chan bool
 }
+
+type WorkerFunc func(ctx context.Context, event *amqp091.Delivery)
 
 // NewRabbitMQ - Create RabbitMQ connection dengan retry on startup + auto-reconnect
 func NewRabbitMQ(config *RabbitMQConfig) (*RabbitMQ, error) {
@@ -79,12 +41,12 @@ func NewRabbitMQ(config *RabbitMQConfig) (*RabbitMQ, error) {
 	// Initial connection with retry
 	maxRetries := 10
 	for i := 1; i <= maxRetries; i++ {
-		log.Printf("🔄 Connecting to RabbitMQ... (attempt %d/%d)", i, maxRetries)
+		log.Printf("Connecting to RabbitMQ... (attempt %d/%d)", i, maxRetries)
 		if err := rmq.connect(); err != nil {
 			if i == maxRetries {
 				return nil, fmt.Errorf("failed to connect after %d attempts: %w", maxRetries, err)
 			}
-			log.Printf("⚠️ Connection attempt %d failed: %v, retrying in %v...", i, err, config.ReconnectDelay)
+			log.Printf("Connection attempt %d failed: %v, retrying in %v...", i, err, config.ReconnectDelay)
 			time.Sleep(config.ReconnectDelay)
 			continue
 		}
@@ -97,16 +59,14 @@ func NewRabbitMQ(config *RabbitMQConfig) (*RabbitMQ, error) {
 		return nil, err
 	}
 
-	// Start auto-reconnect goroutine
 	go rmq.handleReconnect()
 
 	return rmq, nil
 }
 
 func (r *RabbitMQ) connect() error {
-	log.Printf("🔄 Connecting to RabbitMQ at %s...", r.config.URL)
+	log.Printf("Connecting to RabbitMQ at %s...", r.config.URL)
 
-	// Create connection with custom config
 	config := amqp091.Config{
 		Heartbeat: r.config.Heartbeat,
 		Locale:    "en_US",
@@ -142,40 +102,12 @@ func (r *RabbitMQ) connect() error {
 	r.conn = conn
 	r.channel = ch
 
-	log.Printf("✅ Connected to RabbitMQ successfully")
+	log.Printf("Connected to RabbitMQ successfully")
 	return nil
 }
 
 func (r *RabbitMQ) setupTopology() error {
-	log.Println("🔧 Setting up RabbitMQ topology...")
-
-	// // 1. Declare exchanges
-	// exchanges := []struct {
-	// 	name       string
-	// 	kind       string
-	// 	durable    bool
-	// 	autoDelete bool
-	// }{
-	// 	{"chat.messages", "fanout", true, false},
-	// 	{"chat.notifications", "topic", true, false},
-	// 	{"chat.dlx", "fanout", true, false}, // Dead Letter Exchange
-	// }
-
-	// for _, ex := range exchanges {
-	// 	err := r.channel.ExchangeDeclare(
-	// 		ex.name,
-	// 		ex.kind,
-	// 		ex.durable,
-	// 		ex.autoDelete,
-	// 		false, // internal
-	// 		false, // no-wait
-	// 		nil,
-	// 	)
-	// 	if err != nil {
-	// 		return fmt.Errorf("failed to declare exchange %s: %w", ex.name, err)
-	// 	}
-	// 	log.Printf("✅ Exchange declared: %s (%s)", ex.name, ex.kind)
-	// }
+	log.Println("Setting up RabbitMQ topology...")
 
 	for j := range r.config.Exchange {
 		var args amqp091.Table
@@ -196,7 +128,7 @@ func (r *RabbitMQ) setupTopology() error {
 		if err != nil {
 			return fmt.Errorf("failed to declare exchange %s: %w", r.config.Exchange[j].Name, err)
 		}
-		log.Printf("✅ Exchange declared: %s (%s)", r.config.Exchange[j].Name, r.config.Exchange[j].Kind)
+		log.Printf("Exchange declared: %s (%s)", r.config.Exchange[j].Name, r.config.Exchange[j].Kind)
 	}
 
 	for q := range r.config.Queue {
@@ -239,36 +171,7 @@ func (r *RabbitMQ) setupTopology() error {
 		}
 	}
 
-	// for q := range r.config.Queue {
-
-	// }
-
-	// // 2. Declare Dead Letter Queue
-	// _, err := r.channel.QueueDeclare(
-	// 	"chat.dlq", // queue name
-	// 	true,       // durable
-	// 	false,      // delete when unused
-	// 	false,      // exclusive
-	// 	false,      // no-wait
-	// 	nil,
-	// )
-	// if err != nil {
-	// 	return fmt.Errorf("failed to declare DLQ: %w", err)
-	// }
-
-	// // Bind DLQ to DLX
-	// err = r.channel.QueueBind(
-	// 	"chat.dlq",
-	// 	"",
-	// 	"chat.dlx",
-	// 	false,
-	// 	nil,
-	// )
-	// if err != nil {
-	// 	return fmt.Errorf("failed to bind DLQ: %w", err)
-	// }
-
-	log.Println("✅ RabbitMQ topology setup complete")
+	log.Println("RabbitMQ topology setup complete")
 	return nil
 }
 
@@ -279,29 +182,28 @@ func (r *RabbitMQ) handleReconnect() {
 		case <-r.done:
 			return
 		case <-r.conn.NotifyClose(make(chan *amqp091.Error)):
-			log.Println("⚠️ RabbitMQ connection lost, reconnecting...")
+			log.Println("RabbitMQ connection lost, reconnecting...")
 
 			for {
 				time.Sleep(r.config.ReconnectDelay)
 
 				if err := r.connect(); err != nil {
-					log.Printf("❌ Reconnect failed: %v, retrying...", err)
+					log.Printf("Reconnect failed: %v, retrying...", err)
 					continue
 				}
 
 				if err := r.setupTopology(); err != nil {
-					log.Printf("❌ Topology setup failed: %v, retrying...", err)
+					log.Printf("Topology setup failed: %v, retrying...", err)
 					continue
 				}
 
-				log.Println("✅ Reconnected to RabbitMQ")
+				log.Println("Reconnected to RabbitMQ")
 				break
 			}
 		}
 	}
 }
 
-// GetChannel - Get channel for publishing/consuming
 func (r *RabbitMQ) GetChannel() *amqp091.Channel {
 	return r.channel
 }
@@ -311,29 +213,27 @@ func (r *RabbitMQ) GetConnection() *amqp091.Connection {
 	return r.conn
 }
 
-// Close - Close connection gracefully
 func (r *RabbitMQ) Close() error {
 	log.Println("🔌 Closing RabbitMQ connection...")
 
-	close(r.done) // Stop reconnect goroutine
+	close(r.done)
 
 	if r.channel != nil {
 		if err := r.channel.Close(); err != nil {
-			log.Printf("⚠️ Error closing channel: %v", err)
+			log.Printf("Error closing channel: %v", err)
 		}
 	}
 
 	if r.conn != nil {
 		if err := r.conn.Close(); err != nil {
-			log.Printf("⚠️ Error closing connection: %v", err)
+			log.Printf("Error closing connection: %v", err)
 		}
 	}
 
-	log.Println("✅ RabbitMQ connection closed")
+	log.Println("RabbitMQ connection closed")
 	return nil
 }
 
-// CreateChannel - Create new channel (untuk worker yang butuh dedicated channel)
 func (r *RabbitMQ) CreateChannel() (*amqp091.Channel, error) {
 	ch, err := r.conn.Channel()
 	if err != nil {
@@ -366,3 +266,5 @@ func (r *RabbitMQ) HealthCheck() error {
 
 	return nil
 }
+
+func (r *RabbitMQ) DedicatedWorkerPool()

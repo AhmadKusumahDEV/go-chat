@@ -7,7 +7,7 @@ services:
       dockerfile: cmd/api/Dockerfile
     container_name: go_chat
     ports:
-      - "8090:8090" #bagian kanan ini harus sama pada bagian enviroment app_port
+      - "8090:8090" 
     depends_on:
       postgres_db:
         condition: service_healthy

@@ -14,6 +14,23 @@ type Publisher interface {
 	PublishNotification(ctx context.Context, event interface{}) error
 	PublishEventSocket(ctx context.Context, event interface{}) error
 	PublishEventCall(ctx context.Context, event interface{}) error
+	PublishEmailEvent(ctx context.Context, event *EmailEvent) error
+}
+
+type EmailEvent struct {
+	Type     string `json:"type"`
+	To       string `json:"to"`
+	Subject  string `json:"subject"`
+	OTP      string `json:"otp,omitempty"`
+	Username string `json:"username,omitempty"`
+	PlanName string `json:"plan_name,omitempty"`
+	OrderID  string `json:"order_id,omitempty"`
+	Amount   int64  `json:"amount,omitempty"`
+}
+
+type PaymentEvent struct {
+	OrderId string `json:"order_id"`
+	UserId  string `json:"user_id"`
 }
 
 type MessageEvent struct {
@@ -53,6 +70,27 @@ func (p *rabbitMQPublisher) PublishEventCall(ctx context.Context, event interfac
 		ctx,
 		"chat.notifications", // exchange
 		"call.event",         // routing key
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			Body:         body,
+			DeliveryMode: amqp.Persistent,
+			Timestamp:    time.Now(),
+		},
+	)
+}
+
+func (p *rabbitMQPublisher) PublishTierUpgradeEvent(ctx context.Context, event *PaymentEvent) error {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	return p.channel.PublishWithContext(
+		ctx,
+		"payment.exchange",     // exchange
+		"payment.tier.upgrade", // routing key
 		false,
 		false,
 		amqp.Publishing{
@@ -117,6 +155,29 @@ func (p *rabbitMQPublisher) PublishNotification(ctx context.Context, event inter
 		ctx,
 		"chat.notifications",
 		"notification.message.new",
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			Body:         body,
+			DeliveryMode: amqp.Persistent,
+			Timestamp:    time.Now(),
+		},
+	)
+}
+
+func (p *rabbitMQPublisher) PublishEmailEvent(ctx context.Context, event *EmailEvent) error {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	routingKey := "email." + event.Type
+
+	return p.channel.PublishWithContext(
+		ctx,
+		"email.notifications",
+		routingKey,
 		false,
 		false,
 		amqp.Publishing{

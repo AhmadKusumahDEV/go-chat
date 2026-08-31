@@ -27,42 +27,6 @@ func NewMessageWorker(
 }
 
 func (w *MessageWorker) Start(ctx context.Context) error {
-	// 1. Declare queue
-	// q, err := w.rabbitmq.QueueDeclare(
-	// 	"message-persistence",
-	// 	true,
-	// 	false,
-	// 	false,
-	// 	false,
-	// 	amqp091.Table{
-	// 		"x-dead-letter-exchange": "chat.dlx",
-	// 	},
-	// )
-	// if err != nil {
-	// 	return err
-	// }
-
-	// err = w.rabbitmq.QueueBind(
-	// 	q.Name,
-	// 	"",
-	// 	"chat.messages",
-	// 	false,
-	// 	nil,
-	// )
-	// if err != nil {
-	// 	return err
-	// }
-
-	// err = w.rabbitmq.Qos(
-	// 	10,
-	// 	0,
-	// 	false,
-	// )
-	// if err != nil {
-	// 	return err
-	// }
-
-	// 4. Start consuming
 	msgs, err := w.rabbitmq.Consume(
 		"message-persistence",
 		"message-persistence-worker",
@@ -76,7 +40,7 @@ func (w *MessageWorker) Start(ctx context.Context) error {
 		return err
 	}
 
-	log.Println("✅ MessageWorker started, waiting for messages...")
+	log.Println("MessageWorker started, waiting for messages...")
 
 	go func() {
 		for {
@@ -101,12 +65,12 @@ func (w *MessageWorker) Start(ctx context.Context) error {
 }
 
 func (w *MessageWorker) processMessage(msg *amqp091.Delivery) {
-	log.Printf("📥 Processing message: %s", msg.MessageId)
+	log.Printf("Processing message: %s", msg.MessageId)
 
 	// 1. Deserialize event
 	var event queue.MessageEvent
 	if err := json.Unmarshal(msg.Body, &event); err != nil {
-		log.Printf("❌ Failed to unmarshal: %v", err)
+		log.Printf("Failed to unmarshal: %v", err)
 		msg.Nack(false, false) // Send to DLQ
 		return
 	}
@@ -115,7 +79,7 @@ func (w *MessageWorker) processMessage(msg *amqp091.Delivery) {
 	err := w.messageRepo.Create(ctx, event.Message)
 
 	if err != nil {
-		log.Printf("❌ Failed to save to DB: %v", err)
+		log.Printf("Failed to save to DB: %v", err)
 
 		// Check retry count
 		retryCount := 0
@@ -126,10 +90,10 @@ func (w *MessageWorker) processMessage(msg *amqp091.Delivery) {
 		}
 
 		if retryCount >= 3 {
-			log.Printf("⚠️ Max retry reached, sending to DLQ")
+			log.Printf("Max retry reached, sending to DLQ")
 			msg.Nack(false, false) // Send to DLQ
 		} else {
-			log.Printf("🔄 Retry attempt %d", retryCount+1)
+			log.Printf("Retry attempt %d", retryCount+1)
 
 			err := w.rabbitmq.Publish(
 				"",
@@ -146,7 +110,7 @@ func (w *MessageWorker) processMessage(msg *amqp091.Delivery) {
 				},
 			)
 			if err != nil {
-				log.Printf("❌ Failed to publish retry: %v", err)
+				log.Printf("Failed to publish retry: %v", err)
 				msg.Nack(false, true) // Requeue
 				return
 			}
@@ -156,6 +120,6 @@ func (w *MessageWorker) processMessage(msg *amqp091.Delivery) {
 	}
 
 	// 3. Success - ACK message
-	log.Printf("✅ Message saved to DB: %s", event.Message.ID)
+	log.Printf("Message saved to DB: %s", event.Message.ID)
 	msg.Ack(false)
 }

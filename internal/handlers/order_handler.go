@@ -91,7 +91,7 @@ func (h *HandlerOrderImpl) HandlerGetTransaction(c *gin.Context) {
 
 // HandlerMidtransNotification implements [HandlerOrder].
 func (h *HandlerOrderImpl) HandlerMidtransNotification(c *gin.Context) {
-	var req response.MidtransNotification
+	var req models.MidtransNotification
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ApiResponse{

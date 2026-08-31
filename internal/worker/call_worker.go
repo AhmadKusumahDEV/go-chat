@@ -83,15 +83,15 @@ func (w *CallNotificationWorker) TriggerNotificationCall(event *amqp091.Delivery
 	var data websocket.CallerforwardOffer
 
 	if err := json.Unmarshal(event.Body, &data); err != nil {
-		log.Printf("❌ [STEP 1/6] FAILED to unmarshal: %v", err)
-		log.Printf("   📄 Raw body: %s", string(event.Body))
+		log.Printf("FAILED to unmarshal: %v", err)
+		log.Printf("Raw body: %s", string(event.Body))
 		event.Nack(false, false)
 		return
 	}
 
 	token, err := w.firebaseRepo.GetTokensByUserID(ctx, data.TargetUserId)
 	if err != nil {
-		log.Printf("❌ user not have token active for trigger notifiaction: %v", err)
+		log.Printf("user not have token active for trigger notifiaction: %v", err)
 		event.Nack(false, false)
 		return
 	}
@@ -100,6 +100,26 @@ func (w *CallNotificationWorker) TriggerNotificationCall(event *amqp091.Delivery
 	if data.Avatar != nil {
 		avatarStr = *data.Avatar
 	}
+
+	wakeUpMessage := &messaging.Message{
+		Notification: &messaging.Notification{
+			Title: "Panggilan Masuk",
+			Body:  data.CallerName + " sedang memanggil Anda...",
+		},
+		Data: map[string]string{
+			"type": "wakeup_trigger",
+		},
+		Token: token,
+	}
+
+	_, err = w.fcmClient.Send(ctx, wakeUpMessage)
+	if err != nil {
+		log.Printf("Failed to send wake-up notification: %v", err)
+	} else {
+		log.Printf("Wake-up notification sent to trigger OS background")
+	}
+
+	time.Sleep(3 * time.Second)
 
 	duration := time.Duration(45 * time.Second)
 
@@ -123,12 +143,12 @@ func (w *CallNotificationWorker) TriggerNotificationCall(event *amqp091.Delivery
 
 	response, err := w.fcmClient.Send(ctx, callMessage)
 	if err != nil {
-		log.Printf("❌ Failed to send P2P call trigger: %v", err)
+		log.Printf("Failed to send P2P call trigger: %v", err)
 		event.Nack(false, false)
 		return
 	}
 
-	log.Printf("✅ P2P Call triggered successfully. Message ID: %s", response)
+	log.Printf("P2P Call triggered successfully. Message ID: %s", response)
 
 	event.Ack(false)
 }

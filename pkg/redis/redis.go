@@ -1,4 +1,4 @@
-package config
+package redis
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// RedisConfig holds Redis connection configuration
+// Compatible with viper/mapstructure
 type RedisConfig struct {
 	Addr            string        `mapstructure:"addr"`
 	Password        string        `mapstructure:"password"`
@@ -25,10 +27,12 @@ type RedisConfig struct {
 	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
 }
 
-func NewClient(ctx context.Context, url string, password string) (*redis.Client, error) {
+// NewClient is a compatibility wrapper that creates a simple redis.Client
+// For production use, prefer NewRedis() which provides connection management
+func NewClient(ctx context.Context, addr string, password string) (*redis.Client, error) {
 	rdb := redis.NewClient(&redis.Options{
-		Addr:            url,
-		Password:        password, // no password set
+		Addr:            addr,
+		Password:        password,
 		DB:              0,
 		PoolSize:        10,
 		MinIdleConns:    5,

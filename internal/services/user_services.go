@@ -1,7 +1,6 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -19,7 +18,9 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
 	"github.com/AhmadKusumahDEV/go-chat/internal/helpers"
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
+	"github.com/AhmadKusumahDEV/go-chat/internal/queue"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
+	"github.com/AhmadKusumahDEV/go-chat/internal/worker"
 	"github.com/AhmadKusumahDEV/go-chat/pkg/storage"
 	"github.com/gofrs/uuid"
 	"github.com/redis/go-redis/v9"
@@ -38,6 +39,7 @@ type UsersServices interface {
 	VerifyOtp(ctx context.Context, userId, otp string) error
 	UpdatedUserInfo(ctx context.Context, userId uuid.UUID, req *request.UpdateProfileRequest) error
 	UpdateAvatar(ctx context.Context, userID string, reader io.Reader, size int64, contentType, objectName string) (string, error)
+	GetProfileUser(ctx context.Context, userId string) (*response.UserResponse, error)
 }
 
 type UsersServivesImpl struct {
@@ -48,6 +50,83 @@ type UsersServivesImpl struct {
 	httpClient         *http.Client
 	jwtConfig          config.JwtConfig
 	espConfig          config.Esp
+	publisher          queue.Publisher
+}
+
+// GetProfileUser implements [UsersServices].
+func (u *UsersServivesImpl) GetProfileUser(ctx context.Context, userId string) (*response.UserResponse, error) {
+	key := fmt.Sprintf("user:profile:%s", userId)
+
+	result, err := u.rds.Get(ctx, key).Result()
+	if err == redis.Nil {
+		user, err := u.userRepository.ProfileUser(ctx, userId)
+		if err != nil {
+			log.Printf("[GetProfileUser] DB error for user %s: %v", userId, err)
+			return nil, errors.New("gagal mengambil data profil")
+		}
+
+		dtoUser := &response.UserResponse{
+			ID:        user.ID.String(),
+			Username:  user.Username,
+			Email:     user.Email,
+			About:     &user.About.String,
+			CreatedAt: user.CreatedAt,
+			AvatarUrl: &user.AvatarUrl.String,
+			Tier:      user.Tier.String,
+			Verify:    user.Verify.Bool,
+		}
+
+		if err := u.cacheUserProfile(ctx, key, dtoUser); err != nil {
+			log.Printf("[GetProfileUser] Failed to cache profile for user %s: %v", userId, err)
+		}
+
+		return dtoUser, nil
+	} else if err != nil {
+		user, err := u.userRepository.ProfileUser(ctx, userId)
+		if err != nil {
+			log.Printf("[GetProfileUser] DB fallback also failed for user %s: %v", userId, err)
+			return nil, errors.New("gagal mengambil data profil")
+		}
+
+		return &response.UserResponse{
+			ID:        user.ID.String(),
+			Username:  user.Username,
+			Email:     user.Email,
+			About:     &user.About.String,
+			CreatedAt: user.CreatedAt,
+			AvatarUrl: &user.AvatarUrl.String,
+			Tier:      user.Tier.String,
+			Verify:    user.Verify.Bool,
+		}, nil
+	}
+
+	var user response.UserResponse
+	if err := json.Unmarshal([]byte(result), &user); err != nil {
+		log.Printf("[GetProfileUser] Cache unmarshal failed for user %s: %v", userId, err)
+		u.rds.Del(ctx, key)
+		return nil, errors.New("gagal mengambil data profil")
+	}
+
+	return &user, nil
+}
+
+// cacheUserProfile caches user profile data
+func (u *UsersServivesImpl) cacheUserProfile(ctx context.Context, key string, user *response.UserResponse) error {
+	data, err := json.Marshal(user)
+	if err != nil {
+		return err
+	}
+	return u.rds.Set(ctx, key, data, 30*time.Minute).Err()
+}
+
+func (u *UsersServivesImpl) InvalidateUserProfileCache(ctx context.Context, userId string) error {
+	key := fmt.Sprintf("user:profile:%s", userId)
+	if err := u.rds.Del(ctx, key).Err(); err != nil {
+		log.Printf("[InvalidateUserProfileCache] Failed to invalidate cache for user %s: %v", userId, err)
+		return err
+	}
+	log.Printf("[InvalidateUserProfileCache] Cache invalidated for user %s", userId)
+	return nil
 }
 
 // VerifyOtp implements [UsersServices].
@@ -84,19 +163,16 @@ func (u *UsersServivesImpl) VerifyEmail(ctx context.Context, userId uuid.UUID) e
 		otp = models.RandomString(6)
 	}
 
-	payload := BuildMailOtp(ctx, user.Email, otp)
-	if payload == nil {
-		return errors.New("tidak dapat melakukan kirim email")
-	}
-
 	key := fmt.Sprintf("otp:verify:%s", otp)
 
-	req, _ := http.NewRequest("POST", u.espConfig.Brevo.Url, bytes.NewBuffer(payload))
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("api-key", u.espConfig.Brevo.ApiKey)
+	emailEvent := &queue.EmailEvent{
+		Type:     worker.EmailOtp,
+		To:       user.Email,
+		OTP:      otp,
+		Username: user.Username,
+	}
 
-	resp, err := u.httpClient.Do(req)
+	err = u.publisher.PublishEmailEvent(ctx, emailEvent)
 	if err != nil {
 		log.Println(err)
 		return errors.New("tidak dapat melakukan kirim email")
@@ -107,7 +183,6 @@ func (u *UsersServivesImpl) VerifyEmail(ctx context.Context, userId uuid.UUID) e
 		log.Println(err)
 		return errors.New("tidak dapat melakukan kirim email")
 	}
-	defer resp.Body.Close()
 
 	return nil
 }
@@ -320,6 +395,7 @@ func (u *UsersServivesImpl) LogoutUser(ctx context.Context, userId uuid.UUID, fc
 func (u *UsersServivesImpl) UpdatedUserInfo(ctx context.Context, userId uuid.UUID, req *request.UpdateProfileRequest) error {
 	userinfo, err := u.userRepository.FindByID(ctx, userId)
 	if err != nil {
+		log.Printf("❌ [UpdatedUserInfo] User not found: %s", userId)
 		return errors.New("user not found")
 	}
 
@@ -334,23 +410,26 @@ func (u *UsersServivesImpl) UpdatedUserInfo(ctx context.Context, userId uuid.UUI
 
 	err = u.userRepository.Update(ctx, userinfo)
 	if err != nil {
-		return errors.New("tidak dapat melakukan updated user data tidak valid")
+		log.Printf("[UpdatedUserInfo] Failed to update user %s: %v", userId, err)
+		return errors.New("gagal mengupdate profil")
 	}
 
+	if err := u.InvalidateUserProfileCache(ctx, userId.String()); err != nil {
+		log.Printf("[UpdatedUserInfo] Cache invalidation failed for user %s: %v", userId, err)
+	}
+
+	log.Printf("[UpdatedUserInfo] Profile updated and cache invalidated for user: %s", userId)
 	return nil
 }
 
 func (u *UsersServivesImpl) UpdateAvatar(ctx context.Context, userID string, reader io.Reader, size int64, contentType, objectName string) (string, error) {
-	// 1. Upload ke MinIO
 	err := u.minioS3.UploadFile(ctx, "chat-app", objectName, reader, size, contentType)
 	if err != nil {
 		return "", fmt.Errorf("failed to upload to storage: %w", err)
 	}
 
-	// 2. Build URL
 	avatarURL, _ := u.minioS3.GetObjectURL(ctx, objectName, "chat-app")
 
-	// 3. Update DB (rollback MinIO kalau gagal)
 	err = u.userRepository.ChangeAvatar(ctx, userID, avatarURL)
 	if err != nil {
 		rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -361,60 +440,12 @@ func (u *UsersServivesImpl) UpdateAvatar(ctx context.Context, userID string, rea
 		return "", fmt.Errorf("failed to update avatar in db: %w", err)
 	}
 
+	if err := u.InvalidateUserProfileCache(ctx, userID); err != nil {
+		log.Printf("[UpdateAvatar] Cache invalidation failed for user %s: %v", userID, err)
+	}
+
+	log.Printf("[UpdateAvatar] Avatar updated and cache invalidated for user: %s", userID)
 	return avatarURL, nil
-}
-
-func BuildMailOtp(ctx context.Context, recipientEmail, otp string) []byte {
-	htmlContent := fmt.Sprintf(`
-		<!DOCTYPE html>
-		<html>
-		<body style="background-color: #f4f5f7; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 40px 0;">
-			<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-				<div style="text-align: center; margin-bottom: 30px;">
-					<h2 style="color: #333333; font-size: 24px; margin: 0;">Verifikasi Akun</h2>
-				</div>
-				<p style="color: #555555; font-size: 16px; line-height: 1.5;">Halo,</p>
-				<p style="color: #555555; font-size: 16px; line-height: 1.5;">Kami menerima permintaan untuk melakukan aktivitas pada akun Anda. Silakan masukkan kode verifikasi berikut ke dalam aplikasi:</p>
-				
-				<div style="text-align: center; margin: 35px 0;">
-					<div style="display: inline-block; font-size: 36px; font-weight: bold; color: #1a73e8; letter-spacing: 8px; padding: 15px 30px; background-color: #f8f9fa; border: 1px dashed #c6d4e1; border-radius: 6px;">
-						%s
-					</div>
-				</div>
-				
-				<p style="color: #555555; font-size: 14px; line-height: 1.5;">Kode ini hanya berlaku selama <b>5 menit</b>. Jangan bagikan kode ini kepada siapa pun, termasuk pihak admin.</p>
-				
-				<hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0;" />
-				<p style="color: #999999; font-size: 12px; text-align: center; line-height: 1.5;">
-					Jika Anda tidak merasa melakukan permintaan ini, abaikan email ini.<br>
-					&copy; 2026 Madgo. Semua hak dilindungi.
-				</p>
-			</div>
-		</body>
-		</html>
-	`, otp)
-
-	payload := map[string]interface{}{
-		"sender": map[string]string{
-			"name":  "madgov",
-			"email": "noreply@madgo.my.id",
-		},
-		"to": []map[string]string{
-			{
-				"email": recipientEmail,
-			},
-		},
-		"subject":     "Kode Verifikasi Madgo Anda",
-		"htmlContent": htmlContent,
-	}
-
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		log.Println(err)
-		return nil
-	}
-
-	return jsonPayload
 }
 
 func GenerateOtp(n int) (string, error) {
@@ -432,7 +463,7 @@ func GenerateOtp(n int) (string, error) {
 	return string(b), nil
 }
 
-func NewUsersServices(userRepository repository.RepositoryUser, firebase repository.RepositoryFirebase, jwtConfig config.JwtConfig, espconfig config.Esp, minio storage.ObjectStorage, redis *redis.Client, httpClient *http.Client) UsersServices {
+func NewUsersServices(userRepository repository.RepositoryUser, firebase repository.RepositoryFirebase, jwtConfig config.JwtConfig, espconfig config.Esp, minio storage.ObjectStorage, redis *redis.Client, httpClient *http.Client, publisher queue.Publisher) UsersServices {
 	return &UsersServivesImpl{
 		userRepository:     userRepository,
 		firebaseRepository: firebase,
@@ -441,5 +472,6 @@ func NewUsersServices(userRepository repository.RepositoryUser, firebase reposit
 		espConfig:          espconfig,
 		httpClient:         httpClient,
 		rds:                redis,
+		publisher:          publisher,
 	}
 }

@@ -17,17 +17,19 @@ import (
 	"time"
 
 	"github.com/AhmadKusumahDEV/go-chat/internal/config"
-	"github.com/AhmadKusumahDEV/go-chat/internal/dto/request"
 	"github.com/AhmadKusumahDEV/go-chat/internal/dto/response"
 	"github.com/AhmadKusumahDEV/go-chat/internal/models"
+	"github.com/AhmadKusumahDEV/go-chat/internal/queue"
 	"github.com/AhmadKusumahDEV/go-chat/internal/repository"
+	"github.com/AhmadKusumahDEV/go-chat/internal/worker"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redis/go-redis/v9"
 )
 
 type OrderServices interface {
 	GetTransactionList(ctx context.Context, userId string) ([]*response.OrderResponse, error)
-	MidtransNotification(ctx context.Context, notif *response.MidtransNotification) error
-	AddOrder(ctx context.Context, userId string) (*response.SnapResponse, error)
+	MidtransNotification(ctx context.Context, notif *models.MidtransNotification) error
+	AddOrder(ctx context.Context, userId string) (*models.SnapResponse, error)
 }
 
 type OrderServicesImpl struct {
@@ -36,10 +38,11 @@ type OrderServicesImpl struct {
 	OrderRepository repository.OrderRepository
 	httpClient      *http.Client
 	rds             *redis.Client
+	publisher       queue.Publisher
 }
 
 // AddOrder implements [OrderServices].
-func (o *OrderServicesImpl) AddOrder(ctx context.Context, userId string) (*response.SnapResponse, error) {
+func (o *OrderServicesImpl) AddOrder(ctx context.Context, userId string) (*models.SnapResponse, error) {
 	keyLock := fmt.Sprintf("create_order:lock:%s", userId)
 
 	lockStat, err := o.rds.SetNX(ctx, keyLock, "1", 10*time.Second).Result()
@@ -50,7 +53,7 @@ func (o *OrderServicesImpl) AddOrder(ctx context.Context, userId string) (*respo
 
 	token, err := o.OrderRepository.GetActiveOrder(ctx, userId)
 	if err == nil && token.Valid {
-		return &response.SnapResponse{
+		return &models.SnapResponse{
 			Token:       token.String,
 			RedirectURL: GenerateUrlRedirect(&o.cfg, token.String),
 		}, nil
@@ -60,11 +63,11 @@ func (o *OrderServicesImpl) AddOrder(ctx context.Context, userId string) (*respo
 
 	user, err := o.userRepository.FindByID(ctx, userId)
 	if err != nil {
-		return &response.SnapResponse{}, errors.New("User Tidak ditemukan")
+		return &models.SnapResponse{}, errors.New("User Tidak ditemukan")
 	}
 
 	if !user.Verify.Bool {
-		return &response.SnapResponse{}, errors.New("User belum terverifikasi")
+		return &models.SnapResponse{}, errors.New("User belum terverifikasi")
 	}
 
 	orderId := models.GenerateOrderID(time.Now())
@@ -97,7 +100,7 @@ func (o *OrderServicesImpl) AddOrder(ctx context.Context, userId string) (*respo
 		return nil, errors.New("error status receiver")
 	}
 
-	var result response.SnapResponse
+	var result models.SnapResponse
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return nil, fmt.Errorf("parse midtrans response: %w", err)
 	}
@@ -107,7 +110,7 @@ func (o *OrderServicesImpl) AddOrder(ctx context.Context, userId string) (*respo
 		UserID:    user.ID,
 		Plan:      "Subscription Premium",
 		Amount:    req.TransactionInfo.GrossAmount,
-		Status:    "pending",
+		Status:    models.OrderStatusPending,
 		Gateway:   "midtrans",
 		ExpiretAt: expiredDb,
 		SnapToken: sql.NullString{
@@ -161,7 +164,7 @@ func (o *OrderServicesImpl) GetTransactionList(ctx context.Context, userId strin
 }
 
 // MidtransNotification implements [OrderServices].
-func (o *OrderServicesImpl) MidtransNotification(ctx context.Context, notif *response.MidtransNotification) error {
+func (o *OrderServicesImpl) MidtransNotification(ctx context.Context, notif *models.MidtransNotification) error {
 	if !SignatureValidate(notif.SignatureKey, notif.OrderID, notif.GrossAmount, notif.StatusCode, o.cfg.Payment.Midtrans.ServerKey) {
 		return models.ErrSiganature
 	}
@@ -178,6 +181,18 @@ func (o *OrderServicesImpl) MidtransNotification(ctx context.Context, notif *res
 		return errors.New("internal server error")
 	}
 
+	var paidAt pgtype.Timestamptz = pgtype.Timestamptz{
+		Time:  time.Time{},
+		Valid: false,
+	}
+
+	if finalStatus == models.OrderStatusSettled || notif.TransactionStatus == "capture" {
+		paidAt = pgtype.Timestamptz{
+			Time:  time.Now(),
+			Valid: true,
+		}
+	}
+
 	err = o.OrderRepository.UpdatedOrder(ctx, &models.Order{
 		OrderID:        notif.OrderID,
 		WebHookPayload: payload,
@@ -190,22 +205,27 @@ func (o *OrderServicesImpl) MidtransNotification(ctx context.Context, notif *res
 			Valid:  true,
 		},
 		Status: finalStatus,
+		PaidAt: paidAt,
 	})
 	if err != nil {
-		if errors.Is(err, models.ErrStatusAlreadySettled) {
+		if errors.Is(err, models.ErrStatusAlreadySettled) || errors.Is(err, models.ErrSameStatus) {
 			log.Println("Webhook Duplikat (Status sama persis)")
-			return nil
-		}
-
-		if errors.Is(err, models.ErrSameStatus) {
-			log.Println("duplicate webhook")
 			return nil
 		}
 		return err
 	}
 
 	if finalStatus == models.OrderStatusSettled {
-		// do somthing
+		emailEvent := &queue.EmailEvent{
+			Type:    worker.EmailPaymentSuccess,
+			Subject: "Pembayaran Berhasil - Selamat Menggunakan Premium!",
+			OrderID: notif.OrderID,
+		}
+
+		if err := o.publisher.PublishEmailEvent(ctx, emailEvent); err != nil {
+			log.Printf("Failed to publish email event: %v", err)
+		}
+
 		return nil
 	}
 
@@ -235,7 +255,7 @@ func GenerateUrlSnap(cfg *config.Cfg) string {
 	return cfg.Payment.Midtrans.UrlSnapProduction
 }
 
-func CreateDataTransaction(orderId string, user *models.Users, cfg *config.Cfg) (request.SnapRequest, time.Time) {
+func CreateDataTransaction(orderId string, user *models.Users, cfg *config.Cfg) (models.SnapRequest, time.Time) {
 	now := time.Now()
 
 	loc, err := time.LoadLocation("Asia/Jakarta")
@@ -266,8 +286,8 @@ func CreateDataTransaction(orderId string, user *models.Users, cfg *config.Cfg) 
 
 	// grossAmount := countGrossAmount(listItem)
 
-	return request.SnapRequest{
-		TransactionInfo: models.TransactionDetail{
+	return models.SnapRequest{
+		TransactionInfo: models.TransactionDetails{
 			OrderID:     orderId,
 			GrossAmount: 99000,
 		},
@@ -286,21 +306,13 @@ func CreateDataTransaction(orderId string, user *models.Users, cfg *config.Cfg) 
 	}, expiredAtDB
 }
 
-// use this func when have more than one item
-func countGrossAmount(item []models.MerchantItemDetail) int64 {
-	var total int64
-	for _, v := range item {
-		total += v.Price * int64(v.Quantity)
-	}
-	return total
-}
-
-func NewOrderServices(cfg config.Cfg, userRepository repository.RepositoryUser, httpClient *http.Client, orderRepository repository.OrderRepository, redis *redis.Client) OrderServices {
+func NewOrderServices(cfg config.Cfg, userRepository repository.RepositoryUser, httpClient *http.Client, orderRepository repository.OrderRepository, redis *redis.Client, publisher queue.Publisher) OrderServices {
 	return &OrderServicesImpl{
 		cfg:             cfg,
 		userRepository:  userRepository,
 		httpClient:      httpClient,
 		OrderRepository: orderRepository,
 		rds:             redis,
+		publisher:       publisher,
 	}
 }

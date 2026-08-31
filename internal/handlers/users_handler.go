@@ -26,11 +26,55 @@ type UserHandler interface {
 	HandlerUpdateUser(c *gin.Context)
 	HandlerVerifyUser(c *gin.Context)
 	HandlerVerifyOtp(c *gin.Context)
+	HandlerProfile(c *gin.Context)
 	UploadUserAvatar(c *gin.Context)
 }
 
 type UserHandlerImpl struct {
 	services services.UsersServices
+}
+
+// HandlerProfile implements [UserHandler].
+func (u *UserHandlerImpl) HandlerProfile(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized: user_id not found in context",
+		})
+		return
+	}
+
+	// Safe type assertion with validation
+	userIDStr, ok := userID.(string)
+	if !ok || userIDStr == "" {
+		log.Printf("❌ [HandlerProfile] Invalid user_id type or empty")
+		c.JSON(http.StatusUnauthorized, response.ApiResponse{
+			Status:  http.StatusUnauthorized,
+			Message: "Invalid user session",
+		})
+		return
+	}
+
+	log.Printf("📤 [HandlerProfile] Fetching profile for user: %s", userIDStr)
+
+	res, err := u.services.GetProfileUser(c.Request.Context(), userIDStr)
+	if err != nil {
+		log.Printf("❌ [HandlerProfile] Error fetching profile for user %s: %v", userIDStr, err)
+		c.JSON(http.StatusInternalServerError, response.ApiResponse{
+			Status:  http.StatusInternalServerError,
+			Message: "Gagal mengambil data profil",
+		})
+		return
+	}
+
+	log.Printf("✅ [HandlerProfile] Profile fetched successfully for user: %s", userIDStr)
+
+	c.JSON(http.StatusOK, response.ApiResponse{
+		Status:  http.StatusOK,
+		Message: "success get profile",
+		Data:    res,
+	})
 }
 
 // HandlerVerifyOtp implements [UserHandler].

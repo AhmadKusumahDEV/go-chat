@@ -35,7 +35,6 @@ func GenerateUserJWT(param models.GenerateJwtParams) (*models.UserClaims, string
 	return &userclaims, signedToken, nil
 }
 
-// GenerateAuthTokens simplifies token creation by wrapping both access and refresh token generation.
 func GenerateAuthTokens(userinfo models.JwtUsersInfo, accessSecret, refreshSecret string, accessExp, refreshExp int) (string, string, error) {
 	if accessExp == 0 {
 		accessExp = 60

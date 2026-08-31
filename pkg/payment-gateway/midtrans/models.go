@@ -1,15 +1,7 @@
-package models
+package midtrans
 
 import (
-	"database/sql"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"math/rand"
-	"time"
-
-	"github.com/gofrs/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type OrderStatus string
@@ -22,6 +14,8 @@ const (
 	OrderStatusDeny    OrderStatus = "deny"
 	OrderStatusRefund  OrderStatus = "refund"
 )
+
+const Gateway string = "midtrans"
 
 var (
 	ErrStatusAlreadySettled = errors.New("Order is already settled")
@@ -56,26 +50,6 @@ func MapMidtransStatus(statusTransaction string, fraud string) OrderStatus {
 	}
 }
 
-type Order struct {
-	ID             string
-	OrderID        string
-	Plan           string
-	UserID         uuid.UUID
-	Amount         int64
-	Status         OrderStatus
-	Gateway        string
-	GatewayTxID    sql.NullString
-	SnapToken      sql.NullString
-	Username       string
-	Email          string
-	WebHookPayload []byte
-	PaymentMethod  sql.NullString
-	ExpiretAt      time.Time
-	PaidAt         pgtype.Timestamptz
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-}
-
 type SnapRequest struct {
 	TransactionInfo   TransactionDetails `json:"transaction_details"`
 	ItemInfo          ItemDetail         `json:"item_details"`
@@ -85,7 +59,7 @@ type SnapRequest struct {
 	CustomField1      string             `json:"custom_field1"`
 }
 
-type MidtransNotification struct {
+type MidtransWebhooks struct {
 	TransactionID            string                 `json:"transaction_id"`
 	OrderID                  string                 `json:"order_id"`
 	GrossAmount              string                 `json:"gross_amount"`
@@ -175,33 +149,47 @@ type MerchantItemDetail struct {
 	MerchantName string `json:"merchant_name,omitempty"`
 }
 
-func GenerateOrderID(now time.Time) string {
-	date := now.Format("20060102")
-	random := RandomString(8)
-	return fmt.Sprintf("INV-%s-%s", date, random)
-}
-
-func RandomString(n int) string {
-	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
-	}
-	return string(b)
-}
-
 type ChargeRequest struct {
 	PaymentType        string             `json:"payment_type"`
 	TransactionDetails TransactionDetails `json:"transaction_details"`
 	ItemDetails        []ItemDetail       `json:"item_details,omitempty"`
 	CustomerDetails    *CustomerDetails   `json:"customer_details,omitempty"`
 
+	// E-Channel for payments like PLN
+	EChannel *EChannelDetail `json:"echannel,omitempty"`
+
 	// Populate exactly one according to payment_type.
 	GoPay        *GoPayRequest        `json:"gopay,omitempty"`
+	ShopeePay    *ShopeePayRequest    `json:"shopeepay,omitempty"`
 	CreditCard   *CreditCardRequest   `json:"credit_card,omitempty"`
 	BankTransfer *BankTransferRequest `json:"bank_transfer,omitempty"`
 	CStore       *CStoreRequest       `json:"cstore,omitempty"`
 	QRIS         *QRISRequest         `json:"qris,omitempty"`
+}
+
+type ShopeePayRequest struct {
+	CallbackUrl string `json:"callback_url"`
+}
+
+// EMoneyRequest for electronic money payments (ShopeePay, etc.)
+type EMoneyRequest struct {
+	// Optional: specify e-money provider
+	Provider string `json:"provider,omitempty"`
+}
+
+type EChannelDetail struct {
+	BillInfo1 string `json:"bill_info1"`
+	BillInfo2 string `json:"bill_info2"`
+
+	BillInfo3 string `json:"bill_info3,omitempty"`
+	BillInfo4 string `json:"bill_info4,omitempty"`
+	BillInfo5 string `json:"bill_info5,omitempty"`
+	BillInfo6 string `json:"bill_info6,omitempty"`
+	BillInfo7 string `json:"bill_info7,omitempty"`
+	BillInfo8 string `json:"bill_info8,omitempty"`
+
+	// Optional custom bill key; accepts 6–12 digits.
+	BillKey string `json:"bill_key,omitempty"`
 }
 
 type CStoreRequest struct {
@@ -218,7 +206,28 @@ type CStoreRequest struct {
 }
 
 type QRISRequest struct {
-	Acquirer string `json:"acquirer"` // like gopay
+	// Optional: specify acquirer (e.g., "gopay", "shopeepay", "dana", "ovo", "linkaja")
+	Acquirer string `json:"acquirer,omitempty"`
+
+	// Optional: specify merchant order ID for QRIS
+	MerchantOrderID string `json:"merchant_order_id,omitempty"`
+}
+
+// AvailablePayments contains the list of available payment methods
+type AvailablePayments struct {
+	PaymentMethods []string `json:"payment_methods"`
+}
+
+// PaymentMethodConfig holds configuration for specific payment methods
+type PaymentMethodConfig struct {
+	// For bank transfer VA
+	Bank string `json:"bank,omitempty"`
+
+	// For e-channel (e.g., PLN)
+	EChannel *EChannelDetail `json:"echannel,omitempty"`
+
+	// For credit card
+	SaveToken bool `json:"save_token,omitempty"`
 }
 
 type BankTransferRequest struct {
@@ -268,22 +277,34 @@ type CreditCardRequest struct {
 	Authentication bool   `json:"authentication,omitempty"`
 }
 
-// Captures common fields and every method-specific field returned by Midtrans.
 type ChargeResponse struct {
-	StatusCode        string `json:"status_code"`
-	StatusMessage     string `json:"status_message"`
-	TransactionID     string `json:"transaction_id"`
-	OrderID           string `json:"order_id"`
-	GrossAmount       string `json:"gross_amount"`
-	Currency          string `json:"currency"`
-	PaymentType       string `json:"payment_type"`
-	TransactionTime   string `json:"transaction_time"`
-	TransactionStatus string `json:"transaction_status"`
-	FraudStatus       string `json:"fraud_status,omitempty"`
-	SignatureKey      string `json:"signature_key,omitempty"`
+	StatusCode             string `json:"status_code"`
+	StatusMessage          string `json:"status_message"`
+	TransactionID          string `json:"transaction_id"`
+	OrderID                string `json:"order_id"`
+	GrossAmount            string `json:"gross_amount"`
+	Currency               string `json:"currency"`
+	PaymentType            string `json:"payment_type"`
+	TransactionTime        string `json:"transaction_time"`
+	TransactionStatus      string `json:"transaction_status"`
+	FraudStatus            string `json:"fraud_status,omitempty"`
+	SignatureKey           string `json:"signature_key,omitempty"`
+	ChannelResponseCode    string `json:"channel_response_code,omitempty"`
+	ChannelResponseMessage string `json:"channel_response_message,omitempty"`
 
 	Actions []Action `json:"actions,omitempty"`
 
-	// Retains all additional response fields, depending on payment type.
-	Raw map[string]json.RawMessage `json:"-"`
+	VANumbers   []VANumber `json:"va_numbers,omitempty"`
+	BillerCode  string     `json:"biller_code,omitempty"`
+	BillKey     string     `json:"bill_key,omitempty"`
+	PaymentCode string     `json:"payment_code,omitempty"`
+
+	// QRIS responses documented here provide QR URLs in Actions,
+	// such as generate-qr-code / generate-qr-code-v2.
+	QRString string `json:"qr_string,omitempty"`
+}
+
+type VaNumber struct {
+	Bank     string `json:"bank"`
+	VaNumber string `json:"va_number"`
 }

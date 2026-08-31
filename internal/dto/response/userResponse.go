@@ -14,6 +14,8 @@ type UserResponse struct {
 	About     *string   `json:"about"`
 	CreatedAt time.Time `json:"created_at"`
 	AvatarUrl *string   `json:"avatar"`
+	Tier      string    `json:"tier"`
+	Verify    bool      `json:"verify"`
 }
 
 type JwtReponse struct {

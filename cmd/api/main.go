@@ -19,6 +19,8 @@ import (
 	"github.com/AhmadKusumahDEV/go-chat/internal/websocket"
 	"github.com/AhmadKusumahDEV/go-chat/internal/worker"
 	"github.com/AhmadKusumahDEV/go-chat/pkg/httpclient"
+	"github.com/AhmadKusumahDEV/go-chat/pkg/message-broker/rabbitmq"
+	"github.com/AhmadKusumahDEV/go-chat/pkg/redis"
 	"github.com/AhmadKusumahDEV/go-chat/pkg/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -90,7 +92,7 @@ func main() {
 		}
 	}
 
-	rmq, err := config.NewRabbitMQ(&cfg.RabbitMQ)
+	rmq, err := rabbitmq.NewRabbitMQ(&cfg.RabbitMQ)
 	if err != nil {
 		log.Fatalf("failed to connect to RabbitMQ: %v", err)
 	}
@@ -101,7 +103,7 @@ func main() {
 		panic(err)
 	}
 
-	rds, err := config.NewClient(appContext, cfg.Redis.Addr, "")
+	rds, err := redis.NewClient(appContext, cfg.Redis.Addr, "")
 	if err != nil {
 		panic(err)
 	}
@@ -118,16 +120,14 @@ func main() {
 	attacmentsRepository := repository.NewAttachmentsRepository(db)
 	orderRepository := repository.NewOrderRepository(db)
 
-	// 2. Initialize Queue Publisher
 	publisher := queue.NewRabbitMQPublisher(rmq.GetChannel())
 
-	// 3. Initialize Services
 	roomServices := services.NewRoomServices(roomRepository, memberRepository, attacmentsRepository, newClientRedis, validate, s3Object)
-	usersServices := services.NewUsersServices(usersRepository, firebaseRepository, cfg.Jwt, cfg.Esp, s3Object, rds, httpClient)
+	usersServices := services.NewUsersServices(usersRepository, firebaseRepository, cfg.Jwt, cfg.Esp, s3Object, rds, httpClient, publisher)
 	oauthServices := services.NewOauthServices(cfg, newClientRedis, oauthStatesRepository, usersRepository)
 	messageServices := services.NewMessageServices(messageRepository, memberRepository, s3Object)
 	memberServices := services.NewMemberServices(roomRepository, memberRepository, usersRepository, messageRepository, newClientRedis, validate)
-	orderServices := services.NewOrderServices(cfg, usersRepository, httpClient, orderRepository, rds)
+	orderServices := services.NewOrderServices(cfg, usersRepository, httpClient, orderRepository, rds, publisher)
 
 	manager := websocket.NewWebSocketManager(messageServices, roomServices, publisher, rmq.GetChannel(), usersServices)
 	manager.Start()

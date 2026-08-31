@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AhmadKusumahDEV/go-chat/pkg/message-broker/rabbitmq"
+	"github.com/AhmadKusumahDEV/go-chat/pkg/redis"
 	"github.com/spf13/viper"
 )
 
@@ -51,19 +53,19 @@ type MinoConfig struct {
 }
 
 type Cfg struct {
-	AppEnv      string         `mapstructure:"APP_ENV"`
-	DatabaseURL string         `mapstructure:"DATABASE_URL"`
-	Secret      string         `mapstructure:"secret_key"`
-	PathTemp    string         `mapstructure:"path_temp"`
-	RabbitMQ    RabbitMQConfig `mapstructure:"rabbitmq"`
-	Redis       RedisConfig    `mapstructure:"redis"`
-	Server      ServerConfig   `mapstructure:"server"`
-	Jwt         JwtConfig      `mapstructure:"jwt"`
-	OAuth       OAuthConfig    `mapstructure:"oauth"`
-	Firebase    FirebaseConfig `mapstructure:"firebase"`
-	Minio       MinoConfig     `mapstructure:"minio"`
-	Payment     PaymentConfig  `mapstructure:"payment"`
-	Esp         Esp            `mapstructure:"esp"`
+	AppEnv      string                  `mapstructure:"APP_ENV"`
+	DatabaseURL string                  `mapstructure:"DATABASE_URL"`
+	Secret      string                  `mapstructure:"secret_key"`
+	PathTemp    string                  `mapstructure:"path_temp"`
+	RabbitMQ    rabbitmq.RabbitMQConfig `mapstructure:"rabbitmq"`
+	Redis       redis.RedisConfig       `mapstructure:"redis"`
+	Server      ServerConfig            `mapstructure:"server"`
+	Jwt         JwtConfig               `mapstructure:"jwt"`
+	OAuth       OAuthConfig             `mapstructure:"oauth"`
+	Firebase    FirebaseConfig          `mapstructure:"firebase"`
+	Minio       MinoConfig              `mapstructure:"minio"`
+	Payment     PaymentConfig           `mapstructure:"payment"`
+	Esp         Esp                     `mapstructure:"esp"`
 }
 
 func LoadConfig() (config Cfg, err error) {
